@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Customer;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\RajaOngkirController;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\CartItem;
+use App\Models\ProductVariant; 
 use App\Services\MidtransService;
-use App\Services\RajaOngkirService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
@@ -14,77 +16,48 @@ use Illuminate\Support\Facades\Auth;
 class CheckoutController extends Controller
 {
     public function __construct(
-        private MidtransService   $midtrans,
-        private RajaOngkirService $rajaOngkir,
+        private MidtransService $midtrans,
     ) {}
 
+    /**
+     * Halaman Utama Checkout / Informasi Pengiriman
+     */
     public function index()
     {
-        $cartItems = Auth::user()->cartItems()->with('product')->get();
+        $cartItems = Auth::user()->cartItems()->with(['product', 'variant'])->get();
 
         if ($cartItems->isEmpty()) {
-            return redirect()->route('customer.catalog.index')
-                ->with('error', 'Keranjang belanjamu kosong.');
+            return redirect()->route('customer.cart.index')
+                ->with('error', 'Keranjang belanjamu masih kosong.');
         }
 
-        $provinces = $this->rajaOngkir->getProvinces();
+        // PERBAIKAN: Instansiasi data ongkir manual via model ShippingRate telah dihapus karena sudah beralih ke API RajaOngkir
 
-        return view('customer.checkout.index', compact('cartItems', 'provinces'));
+        return view('customer.checkout.index', compact('cartItems'));
     }
-
-    public function getCities(Request $request)
-    {
-        $request->validate(['province_id' => 'required|integer']);
-
-        $cities = $this->rajaOngkir->getCities($request->province_id);
-
-        return response()->json($cities);
-    }
-
-    public function getShippingCost(Request $request)
+        
+    /**
+     * Endpoint AJAX untuk memproses Order & mendapatkan Snap Token Midtrans
+     */
+    public function process(Request $request)
     {
         $request->validate([
-            'destination_city_id' => 'required|integer',
-            'courier'             => 'required|in:jne,pos,jnt',
+            'shipping_address' => 'required|string|max:500',
+            'courier'          => 'required|string|max:20',
+            'courier_service'  => 'required|string|max:20',
+            'shipping_cost'    => 'required|integer|min:0',
         ]);
 
-        $cartItems = Auth::user()->cartItems()->with('product')->get();
+        $cartItems = Auth::user()->cartItems()->with(['product', 'variant'])->get();
 
-        // ✅ BUG #1 FIXED — operator presedensi diperbaiki
-        $totalWeight = $cartItems->sum(
-            fn($item) => ($item->product->weight ?? 500) * $item->quantity
-        );
-
-        $costs = $this->rajaOngkir->getCost(
-            $request->destination_city_id,
-            max($totalWeight, 1000),
-            $request->courier
-        );
-
-        return response()->json($costs);
-    }
-
-    public function processOrder(Request $request)
-    {
-        $request->validate([
-            'shipping_address'    => 'required|string|max:500',
-            'destination_city_id' => 'required|integer',
-            'courier'             => 'required|string|max:20',
-            'courier_service'     => 'required|string|max:20',
-            'shipping_cost'       => 'required|integer|min:0',
-        ]);
-
-        $cartItems = Auth::user()->cartItems()->with('product')->get();
-
-        // Guard: pastikan cart tidak kosong saat proses
         if ($cartItems->isEmpty()) {
             return response()->json(['message' => 'Keranjang kosong.'], 422);
         }
 
-        $subtotal = $cartItems->sum(fn($i) => $i->product->price * $i->quantity);
+        $subtotal = $cartItems->sum(fn($i) => ($i->variant->price ?? $i->product->price) * $i->quantity);
         $total    = $subtotal + $request->shipping_cost;
 
-        // Buat order
+        // 1. Buat Header Order
         $order = Order::create([
             'user_id'          => Auth::id(),
             'order_code'       => 'BI-' . now()->format('Ymd') . '-' . strtoupper(Str::random(5)),
@@ -98,25 +71,34 @@ class CheckoutController extends Controller
             'courier_service'  => $request->courier_service,
         ]);
 
-        // Salin item cart ke order
+        // 2. Simpan Detail Item & Potong Stok SINKRON
         foreach ($cartItems as $item) {
+            $currentPrice = $item->variant->price ?? $item->product->price;
+
             OrderItem::create([
                 'order_id'   => $order->id,
                 'product_id' => $item->product_id,
+                'variant_id' => $item->variant_id,
                 'quantity'   => $item->quantity,
-                'price'      => $item->product->price,
-                'subtotal'   => $item->product->price * $item->quantity,
+                'price'      => $currentPrice,
+                'subtotal'   => $currentPrice * $item->quantity,
             ]);
 
+            // A. POTONG STOK VARIAN (S/M/L) - Supaya detail produk jadi berkurang
+            if ($item->variant_id) {
+                ProductVariant::where('id', $item->variant_id)->decrement('stock', $item->quantity);
+            }
+
+            // B. POTONG STOK UTAMA - Supaya tabel dashboard utama admin ikut berkurang
             $item->product->decrement('stock', $item->quantity);
         }
 
-        // ✅ BUG #5 FIXED — load relasi sebelum kirim ke Midtrans
+        // 3. Integrasi Midtrans
         $order->load('items.product');
         $snapToken = $this->midtrans->createSnapToken($order);
         $order->update(['snap_token' => $snapToken]);
 
-        // Kosongkan cart
+        // 4. Kosongkan Keranjang Belanja User
         Auth::user()->cartItems()->delete();
 
         return response()->json([
@@ -126,16 +108,18 @@ class CheckoutController extends Controller
         ]);
     }
 
+    /**
+     * Halaman Finish Checkout / Nota Pembayaran Berhasil
+     */
     public function finish(Request $request)
     {
-        // Guard: pastikan parameter order_id ada
         if (! $request->filled('order_id')) {
             return redirect()->route('customer.home');
         }
 
         $order = Order::with('items.product')
             ->where('order_code', $request->order_id)
-            ->where('user_id', Auth::id()) // pastikan order milik user ini
+            ->where('user_id', Auth::id())
             ->firstOrFail();
 
         return view('customer.checkout.finish', compact('order'));

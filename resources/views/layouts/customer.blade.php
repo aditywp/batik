@@ -54,6 +54,7 @@
                 <a href="{{ route('welcome') }}" class="{{ request()->routeIs('welcome') ? 'text-amber-500' : 'text-gray-400 hover:text-white' }} transition">Beranda</a>
                 <a href="{{ route('catalog.index') }}" class="{{ request()->routeIs('catalog.index') ? 'text-amber-500' : 'text-gray-400 hover:text-white' }} transition">Katalog</a>
                 
+                {{-- DROPDOWN COLLECTIONS CLEAN LOOK --}}
                 <div class="relative" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false">
                     <button class="text-gray-400 hover:text-white transition uppercase tracking-[0.2em] py-8 flex items-center gap-1">
                         Collections
@@ -65,18 +66,13 @@
                          x-transition:enter-start="opacity-0 translate-y-2"
                          x-transition:enter-end="opacity-100 translate-y-0"
                          x-cloak
-                         class="absolute top-[80%] left-0 w-72 bg-[#0a0a0a] border border-white/10 shadow-2xl py-8 px-10 z-[150]">
+                         class="absolute top-[80%] left-0 w-56 bg-[#0a0a0a] border border-white/10 shadow-2xl py-6 px-6 z-[150]">
                         
-                        <div class="inline-block bg-white text-black px-3 py-1 mb-8">
-                            <span class="text-[11px] font-black uppercase tracking-tighter">Collections</span>
-                        </div>
-
-                        <ul class="flex flex-col gap-6">
-                            <li><a href="{{ route('catalog.index', ['collection' => 'women']) }}" class="text-[11px] text-gray-400 hover:text-white hover:translate-x-2 transition-all duration-300 block tracking-[0.2em]">WOMEN</a></li>
-                            <li><a href="{{ route('catalog.index', ['collection' => 'men']) }}" class="text-[11px] text-gray-400 hover:text-white hover:translate-x-2 transition-all duration-300 block tracking-[0.2em]">MEN</a></li>
-                            <li><a href="{{ route('catalog.index', ['collection' => 'kids']) }}" class="text-[11px] text-gray-400 hover:text-white hover:translate-x-2 transition-all duration-300 block tracking-[0.2em]">KIDS</a></li>
-                            <li><a href="{{ route('catalog.index', ['collection' => 'craft']) }}" class="text-[11px] text-gray-400 hover:text-white hover:translate-x-2 transition-all duration-300 block tracking-[0.2em]">CRAFT</a></li>
-                            <li><a href="{{ route('catalog.index', ['collection' => 'family']) }}" class="text-[11px] text-gray-400 hover:text-white hover:translate-x-2 transition-all duration-300 block tracking-[0.2em]">FAMILY</a></li>
+                        <ul class="flex flex-col gap-4">
+                            <li><a href="{{ route('catalog.index', ['collection' => 'women']) }}" class="text-[11px] text-gray-400 hover:text-white hover:translate-x-1.5 transition-all duration-300 block tracking-[0.2em]">WOMEN</a></li>
+                            <li><a href="{{ route('catalog.index', ['collection' => 'men']) }}" class="text-[11px] text-gray-400 hover:text-white hover:translate-x-1.5 transition-all duration-300 block tracking-[0.2em]">MEN</a></li>
+                            <li><a href="{{ route('catalog.index', ['collection' => 'craft']) }}" class="text-[11px] text-gray-400 hover:text-white hover:translate-x-1.5 transition-all duration-300 block tracking-[0.2em]">CRAFT</a></li>
+                            <li><a href="{{ route('catalog.index', ['collection' => 'family']) }}" class="text-[11px] text-gray-400 hover:text-white hover:translate-x-1.5 transition-all duration-300 block tracking-[0.2em]">FAMILY</a></li>
                         </ul>
                     </div>
                 </div>
@@ -108,7 +104,7 @@
                             </div>
 
                             <div x-show="open" x-cloak x-transition class="absolute top-12 right-0 w-48 bg-[#0a0a0a] border border-white/10 shadow-2xl rounded-xl py-2 z-[110]">
-                                <a href="{{ route('customer.home') }}" class="block px-4 py-2 text-[10px] uppercase tracking-widest text-gray-400 hover:text-amber-500">My Orders</a>
+                                <a href="{{ route('customer.orders.index') }}" class="block px-4 py-2 text-sm text-[#f59e0b] hover:bg-gray-800 transition-all">MY ORDERS</a>
                                 <a href="{{ route('profile.edit') }}" class="block px-4 py-2 text-[10px] uppercase tracking-widest text-gray-400 hover:text-amber-500 border-b border-white/5">Settings</a>
                                 <form action="{{ route('logout') }}" method="POST">
                                     @csrf
@@ -125,34 +121,32 @@
         </div>
     </nav>
 
-    <main class="pt-20">
+    <nav class="pt-20">
         @yield('content')
-    </main>
+    </nav>
 
     <footer class="py-20 border-t border-white/5 bg-black w-full text-white">
         <div class="max-w-7xl mx-auto px-10">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-16 mb-24">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-16 mb-24">
                 
-                <div class="col-span-1 md:col-span-2 text-left">
+                {{-- Kolom 1: Tentang Brand --}}
+                <div class="text-left">
                     <h2 class="text-xl font-bold text-white tracking-[0.3em] uppercase mb-6">Batik Ifawati</h2>
-                    <p class="text-gray-500 text-[11px] max-w-sm leading-[2.2] uppercase tracking-[0.1em]">
+                    <p class="text-gray-500 text-[11px] leading-[2.2] uppercase tracking-[0.1em]">
                         Menghadirkan keindahan tradisi Nusantara melalui sentuhan modern. Kami percaya setiap motif batik menceritakan filosofi yang akan membuat Anda selalu diingat.
                     </p>
-                    <div class="mt-10 flex max-w-sm border-b border-white/20 focus-within:border-white transition">
-                        <input type="email" placeholder="JOIN IFAWATI CIRCLE" class="bg-transparent py-4 w-full text-[10px] tracking-widest focus:outline-none text-white uppercase">
-                        <button class="text-white text-[10px] uppercase font-bold tracking-widest px-4 hover:text-amber-500 transition">Join</button>
-                    </div>
                 </div>
 
+                {{-- Kolom 2: Menu Bantuan --}}
                 <div class="text-left">
                     <h4 class="text-[10px] font-black text-white mb-8 uppercase tracking-[0.3em]">Bantuan</h4>
                     <ul class="text-gray-500 text-[10px] space-y-4 uppercase tracking-[0.2em]">
                         <li><a href="{{ route('catalog.index') }}" class="hover:text-amber-500 transition">Katalog</a></li>
-                        <li><a href="#" class="hover:text-amber-500 transition">Lacak Pesanan</a></li>
-                        <li><a href="#" class="hover:text-amber-500 transition">Hubungi Kami</a></li>
+                        <li><a href="{{ route('customer.orders.index') }}" class="hover:text-amber-500 transition">Lacak Pesanan</a></li>
                     </ul>
                 </div>
 
+                {{-- Kolom 3: Menu Legalitas --}}
                 <div class="text-left">
                     <h4 class="text-[10px] font-black text-white mb-8 uppercase tracking-[0.3em]">Legalitas</h4>
                     <ul class="text-gray-500 text-[10px] space-y-4 uppercase tracking-[0.2em]">
@@ -160,6 +154,17 @@
                         <li><a href="#" class="hover:text-amber-500 transition">Syarat & Ketentuan</a></li>
                     </ul>
                 </div>
+
+                {{-- Kolom 4: Hubungi Kami (Termasuk Link Instagram Terbaru) --}}
+                <div class="text-left">
+                    <h4 class="text-[10px] font-black text-white mb-8 uppercase tracking-[0.3em]">Hubungi Kami</h4>
+                    <ul class="text-gray-500 text-[10px] space-y-4 uppercase tracking-[0.2em]">
+                        <li><a href="https://wa.me/628157949494" target="_blank" class="hover:text-amber-500 transition flex items-center gap-1">WhatsApp</a></li>
+                        <li><a href="https://instagram.com/batik_ifawati" target="_blank" class="hover:text-amber-500 transition flex items-center gap-1">Instagram</a></li>
+                        <li><a href="mailto:support@batikifawati.com" class="hover:text-amber-500 transition">Email Support</a></li>
+                    </ul>
+                </div>
+
             </div>
             
             <div class="flex flex-col md:flex-row justify-between items-center border-t border-white/5 pt-12 text-[9px] uppercase tracking-[0.3em] text-gray-600 gap-6 text-center md:text-left">

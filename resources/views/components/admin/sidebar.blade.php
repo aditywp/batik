@@ -2,7 +2,7 @@
 
     {{-- Logo --}}
     <div class="px-5 py-5 border-b border-white/10">
-        <h1 class="text-[#e8c9a0] font-semibold text-base tracking-wide">Batik Ifawati</h1>
+        <h1 class="text-[#e8c9a0] font-semibold text-base tracking-wide uppercase">Batik Ifawati</h1>
         <p class="text-white/30 text-xs mt-0.5">Admin Panel</p>
     </div>
 
@@ -15,8 +15,8 @@
         <a href="{{ route('admin.dashboard') }}"
            class="flex items-center gap-3 px-5 py-2.5 text-sm transition-colors
                   {{ request()->routeIs('admin.dashboard') 
-                     ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-l-2 border-[#e8c9a0]' 
-                     : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-l-2 border-transparent' }}">
+                      ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-l-2 border-[#e8c9a0]' 
+                      : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-l-2 border-transparent' }}">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
             </svg>
@@ -27,8 +27,8 @@
         <a href="{{ route('admin.categories.index') }}"
            class="flex items-center gap-3 px-5 py-2.5 text-sm transition-colors
                   {{ request()->routeIs('admin.categories.*')
-                     ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-l-2 border-[#e8c9a0]'
-                     : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-l-2 border-transparent' }}">
+                      ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-l-2 border-[#e8c9a0]'
+                      : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-l-2 border-transparent' }}">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
             </svg>
@@ -39,8 +39,8 @@
         <a href="{{ route('admin.products.index') }}"
            class="flex items-center gap-3 px-5 py-2.5 text-sm transition-colors
                   {{ request()->routeIs('admin.products.*')
-                     ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-l-2 border-[#e8c9a0]'
-                     : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-l-2 border-transparent' }}">
+                      ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-l-2 border-[#e8c9a0]'
+                      : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-l-2 border-transparent' }}">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
@@ -49,26 +49,35 @@
 
         <p class="px-5 text-[10px] text-white/25 uppercase tracking-widest mb-2 mt-6">Transaksi</p>
 
-            {{-- Di components/admin/sidebar.blade.php, tambahkan menu Pesanan --}}
+        {{-- Pesanan --}}
+        <a href="{{ route('admin.orders.index') }}"
+           class="flex items-center gap-3 px-5 py-2.5 text-sm transition-colors border-l-2
+                  {{ request()->routeIs('admin.orders.index') || request()->routeIs('admin.orders.show')
+                      ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-[#e8c9a0]'
+                      : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-transparent' }}">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+            </svg>
+            Pesanan
+            @php $pending = \App\Models\Order::where('status', 'pending')->count(); @endphp
+            @if($pending > 0)
+                <span class="ml-auto text-xs bg-amber-400 text-amber-900 font-semibold px-1.5 py-0.5 rounded-full">
+                    {{ $pending }}
+                </span>
+            @endif
+        </a>
 
-            <a href="{{ route('admin.orders.index') }}"
-            class="flex items-center gap-3 px-5 py-2.5 text-sm transition-colors border-l-2
-                    {{ request()->routeIs('admin.orders.*')
-                        ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-[#e8c9a0]'
-                        : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-transparent' }}">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                        d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
-                </svg>
-                Pesanan
-                @php $pending = \App\Models\Order::where('status', 'pending')->count(); @endphp
-                @if($pending > 0)
-                    <span class="ml-auto text-xs bg-amber-400 text-amber-900 font-semibold
-                                px-1.5 py-0.5 rounded-full">
-                        {{ $pending }}
-                    </span>
-                @endif
-            </a>
+        {{-- Laporan (MENU BARU) --}}
+        <a href="{{ route('admin.orders.report') }}"
+           class="flex items-center gap-3 px-5 py-2.5 text-sm transition-colors border-l-2
+                  {{ request()->routeIs('admin.orders.report')
+                      ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-[#e8c9a0]'
+                      : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-transparent' }}">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            Laporan
+        </a>
 
     </nav>
 

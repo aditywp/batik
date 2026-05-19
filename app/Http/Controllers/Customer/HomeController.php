@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Customer;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use Illuminate\Http\Request;
+// Import RajaOngkirController yang baru
+use App\Http\Controllers\RajaOngkirController; 
 
 class HomeController extends Controller
 {
@@ -24,9 +26,15 @@ class HomeController extends Controller
      */
     public function index()
     {
-        // PERBAIKAN: Mengambil data produk agar variabel $products tidak Undefined
+        // Mengambil data produk agar variabel $products tidak Undefined
         $products = Product::with(['category'])->latest()->get();
 
-        return view('customer.home', compact('products'));
+        // PERBAIKAN: Memanggil RajaOngkirController secara langsung 
+        // karena Service sudah dihapus
+        $rajaOngkir = new RajaOngkirController();
+        $provinces = $rajaOngkir->getProvinces();
+
+        // Kirim $products dan $provinces ke view
+        return view('customer.home', compact('products', 'provinces'));
     }
 }

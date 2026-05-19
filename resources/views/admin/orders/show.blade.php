@@ -59,6 +59,13 @@
                         <span class="text-stone-400">Kurir</span>
                         <span class="text-stone-700 font-medium uppercase">{{ $order->courier }} {{ $order->courier_service }}</span>
                     </div>
+
+                    {{-- MENAMPILKAN NOMOR RESI --}}
+                    <div class="flex justify-between border-t border-stone-50 pt-2 mt-2">
+                        <span class="text-stone-400">No. Resi</span>
+                        <span class="text-stone-700 font-mono font-bold">{{ $order->tracking_number ?? 'Belum ada resi' }}</span>
+                    </div>
+
                     @if($order->paid_at)
                     <div class="flex justify-between">
                         <span class="text-stone-400">Dibayar</span>
@@ -79,7 +86,7 @@
                         Status saat ini: <strong class="text-stone-700">{{ $order->statusLabel() }}</strong>
                     </p>
 
-                    <form action="{{ route('admin.orders.update-status', $order) }}" method="POST">
+                    <form action="{{ route('admin.orders.update-status', $order) }}" method="POST" x-data="{ selectedStatus: '' }">
                         @csrf
                         @method('PATCH')
 
@@ -91,10 +98,18 @@
                                 <label class="flex items-center gap-3 p-3 rounded-lg border border-stone-200
                                               cursor-pointer hover:bg-stone-50 transition-colors
                                               has-[:checked]:border-stone-800 has-[:checked]:bg-stone-50">
-                                    <input type="radio" name="status" value="{{ $nextStatus }}" class="accent-stone-900">
+                                    <input type="radio" name="status" value="{{ $nextStatus }}" 
+                                           x-model="selectedStatus" class="accent-stone-900">
                                     <span class="text-sm text-stone-700">{{ $info['label'] }}</span>
                                 </label>
                             @endforeach
+                        </div>
+
+                        {{-- Input Resi: Muncul HANYA jika Admin pilih 'shipped' --}}
+                        <div x-show="selectedStatus === 'shipped'" x-cloak class="mb-4">
+                            <label class="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-2">Nomor Resi (AWB)</label>
+                            <input type="text" name="tracking_number" placeholder="Contoh: JNT12345678"
+                                   class="w-full bg-stone-50 border-stone-200 rounded-lg text-sm focus:ring-stone-900 focus:border-stone-900">
                         </div>
 
                         <button type="submit"
@@ -125,11 +140,16 @@
                     @foreach($order->items as $item)
                     <div class="flex items-center gap-4 px-5 py-4">
                         {{-- Gambar produk --}}
-                        <div class="w-14 h-14 rounded-lg bg-stone-100 border border-stone-200
-                                    flex-shrink-0 overflow-hidden">
-                            @if($item->product && $item->product->image)
-                                <img src="{{ Storage::url($item->product->image) }}"
-                                     alt="{{ $item->product->name }}"
+                        <div class="w-14 h-14 rounded-lg bg-stone-100 border border-stone-200 flex-shrink-0 overflow-hidden">
+                            @php
+                                $displayImage = $item->variant->image_path 
+                                                ?? $item->product->images->first()->image_path 
+                                                ?? null;
+                            @endphp
+
+                            @if($displayImage)
+                                <img src="{{ asset('storage/' . $displayImage) }}"
+                                     alt="{{ $item->product->name ?? 'Produk' }}"
                                      class="w-full h-full object-cover" />
                             @else
                                 <div class="w-full h-full flex items-center justify-center text-stone-300">
@@ -147,6 +167,9 @@
                             </p>
                             <p class="text-xs text-stone-400 mt-0.5">
                                 {{ $item->quantity }} × Rp {{ number_format($item->price, 0, ',', '.') }}
+                                @if($item->variant)
+                                    <span class="ml-1 text-stone-500 font-medium italic">({{ $item->variant->motif }} / {{ $item->variant->size }})</span>
+                                @endif
                             </p>
                         </div>
 

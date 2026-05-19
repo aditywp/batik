@@ -1,6 +1,7 @@
 @extends('layouts.customer')
 
 @section('content')
+    {{-- HERO SECTION --}}
     <section class="min-h-screen flex flex-col lg:flex-row items-center pt-20">
         <div class="w-full lg:w-1/2 relative flex justify-center items-center p-10 fade-in">
             <div class="absolute z-0 opacity-20">
@@ -10,27 +11,23 @@
             <div class="relative z-10">
                 @if(isset($products) && $products->count() > 0)
                     @php $heroProduct = $products->first(); @endphp
-                    <img src="{{ asset('storage/' . ($heroProduct->variants->first()->image_path ?? 'placeholder.jpg')) }}" 
-                         class="w-[320px] h-[450px] object-cover rounded-sm shadow-2xl border border-white/10" 
-                         style="mask-image: linear-gradient(to bottom, black 85%, transparent 100%);">
-                    
-                    <div class="absolute bottom-10 -right-6 lg:-right-10 bg-black/60 backdrop-blur-lg border border-white/10 p-5 text-left">
-                        <p class="text-[9px] uppercase tracking-[0.3em] text-amber-500 mb-1">Highlight</p>
-                        <h4 class="text-sm font-semibold tracking-wider text-white">{{ $heroProduct->name }}</h4>
-                        <p class="text-[10px] text-gray-400 mt-1 uppercase">{{ $heroProduct->category->name }}</p>
-                    </div>
+                    {{-- PERBAIKAN 1: Menambahkan link navigasi langsung ke detail produk pada Highlight --}}
+                    <a href="{{ route('catalog.show', $heroProduct->slug) }}" class="block relative group cursor-pointer">
+                        <img src="{{ asset('storage/' . ($heroProduct->variants->first()->image_path ?? 'placeholder.jpg')) }}" 
+                             class="w-[320px] h-[450px] object-cover rounded-sm shadow-2xl border border-white/10 group-hover:scale-[1.02] transition duration-500" 
+                             style="mask-image: linear-gradient(to bottom, black 85%, transparent 100%);">
+                        
+                        <div class="absolute bottom-10 -right-6 lg:-right-10 bg-black/60 backdrop-blur-lg border border-white/10 p-5 text-left group-hover:bg-black/80 transition duration-500">
+                            <p class="text-[9px] uppercase tracking-[0.3em] text-amber-500 mb-1">Highlight</p>
+                            <h4 class="text-sm font-semibold tracking-wider text-white">{{ $heroProduct->name }}</h4>
+                            <p class="text-[10px] text-gray-400 mt-1 uppercase">{{ $heroProduct->category->name }}</p>
+                        </div>
+                    </a>
                 @endif
             </div>
         </div>
 
-        <div class="w-full lg:w-1/2 flex flex-col justify-center px-10 lg:px-20 text-center lg:text-left fade-in" style="animation-delay: 0.3s">
-            <div class="mb-8 flex justify-center lg:justify-start">
-                <div class="w-24 h-24 rounded-full border border-white/5 flex items-center justify-center relative">
-                    <div class="absolute inset-0 sun-burst opacity-20 animate-pulse"></div>
-                    <div class="w-2 h-2 bg-white rounded-full"></div>
-                </div>
-            </div>
-            
+        <div class="w-full lg:w-1/2 flex flex-col justify-center px-10 lg:px-20 text-center lg:text-left fade-in" style="animation-delay: 0.3s">      
             <h1 class="text-5xl lg:text-6xl font-playfair italic mb-8 leading-tight text-white">
                 Start to be <br> 
                 <span class="not-italic">Remembered</span>
@@ -47,23 +44,25 @@
         </div>
     </section>
 
+    {{-- FEATURED COLLECTIONS SECTION --}}
     <section id="featured" class="py-32 bg-hmns-dark">
         <div class="max-w-7xl mx-auto px-10">
             <div class="flex justify-between items-end mb-16">
                 <div>
                     <p class="text-[10px] uppercase tracking-[0.4em] text-amber-500 mb-2">Curated Selection</p>
-                    <h2 class="text-3xl font-playfair text-white text-white">Featured Collections</h2>
+                    <h2 class="text-3xl font-playfair text-white">Featured Collections</h2>
                 </div>
                 <a href="{{ route('catalog.index') }}" class="text-[10px] uppercase tracking-[0.2em] border-b border-white/20 pb-1 hover:border-white transition">View All</a>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
-                @if(isset($products))
-                    @foreach($products as $product)
+                @if(isset($products) && $products->count() > 0)
+                    @foreach($products->take(3) as $product)
                     <div class="group cursor-pointer">
                         <div class="relative overflow-hidden aspect-[3/4] bg-black">
+                            {{-- PERBAIKAN 2: Menghapus class 'grayscale' agar foto produk berwarna asli sejak awal --}}
                             <img src="{{ asset('storage/' . ($product->variants->first()->image_path ?? 'placeholder.jpg')) }}" 
-                                 class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition duration-1000 group-hover:scale-105">
+                                 class="w-full h-full object-cover transition duration-1000 group-hover:scale-105 border border-white/5">
                             
                             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
                                 <div class="flex flex-col gap-3 w-full px-10">
@@ -102,6 +101,7 @@
         </div>
     </section>
 
+    {{-- PHILOSOPHY SECTION --}}
     <section class="py-32 bg-black border-t border-white/5">
         <div class="max-w-7xl mx-auto px-10 flex flex-col lg:flex-row items-center gap-20">
             <div class="lg:w-1/2">
@@ -115,11 +115,12 @@
                 </a>
             </div>
             <div class="lg:w-1/2 grid grid-cols-2 gap-6 text-white">
+                {{-- PERBAIKAN 3: Menghapus class 'grayscale' pada dua gambar galeri cerita di bawah ini --}}
                 <div class="overflow-hidden">
-                    <img src="https://images.unsplash.com/photo-1615484477778-ca3b77940c25?auto=format&fit=crop&q=80" class="w-full h-80 object-cover grayscale hover:grayscale-0 transition duration-700 hover:scale-110">
+                    <img src="https://images.unsplash.com/photo-1615484477778-ca3b77940c25?auto=format&fit=crop&q=80" class="w-full h-80 object-cover transition duration-700 hover:scale-110">
                 </div>
                 <div class="overflow-hidden mt-12">
-                    <img src="https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&q=80" class="w-full h-80 object-cover grayscale hover:grayscale-0 transition duration-700 hover:scale-110">
+                    <img src="https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&q=80" class="w-full h-80 object-cover transition duration-700 hover:scale-110">
                 </div>
             </div>
         </div>

@@ -7,17 +7,17 @@
     
     <title>@yield('title', 'Dashboard') — Batik Ifawati Admin</title>
 
-    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
-    <!-- Alpine.js (Ditambahkan x-cloak style agar UI tidak kedip) -->
     <style>
         [x-cloak] { display: none !important; }
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
     </style>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    {{-- PERBAIKAN 1: Memanggil Alpine.js dari lokal public/js/ untuk menghindari pemblokiran browser --}}
+    <script defer src="{{ asset('js/alpine.js') }}"></script>
 
     @stack('styles')
 </head>
@@ -83,6 +83,9 @@
 
         </div>
     </div>
+
+    {{-- PERBAIKAN 2: Memanggil SweetAlert2 dari lokal public/js/ agar tersedia global di seluruh halaman admin --}}
+    <script src="{{ asset('js/sweetalert2.js') }}"></script>
 
     @stack('scripts')
 </body>

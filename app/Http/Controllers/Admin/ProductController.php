@@ -15,12 +15,44 @@ use Illuminate\Support\Facades\DB;
 class ProductController extends Controller
 {
     /**
-     * Tampilkan daftar produk.
+     * Tampilkan daftar produk dengan fitur Pencarian, Filter Kategori, Koleksi, dan Status Stok.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $products = Product::with(['category', 'images', 'variants'])->latest()->paginate(10);
-        return view('admin.products.index', compact('products'));
+        // 1. Mulai Query dengan Eager Loading untuk efisiensi database
+        $query = Product::with(['category', 'images', 'variants'])->latest();
+
+        // 2. Logika Pencarian Nama Produk
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
+
+        // 3. Logika Filter Kategori
+        if ($request->filled('category')) {
+            $query->where('category_id', $request->category);
+        }
+
+        // 4. Logika Filter Koleksi (Sinkron dengan Case-Sensitive database)
+        if ($request->filled('collection')) {
+            $query->where('collection', $request->collection);
+        }
+
+        // 5. TAMBAHAN BARU: Logika Filter Kondisi/Status Stok
+        if ($request->filled('stock_status')) {
+            if ($request->stock_status === 'empty') {
+                $query->where('stock', '=', 0);
+            } elseif ($request->stock_status === 'low') {
+                $query->where('stock', '>', 0)->where('stock', '<=', 5);
+            }
+        }
+
+        // 6. Eksekusi Pagination (12 produk agar rapi di tampilan Grid)
+        $products = $query->paginate(12)->withQueryString();
+        
+        // 7. Ambil semua kategori untuk isi dropdown filter di View
+        $categories = Category::all();
+
+        return view('admin.products.index', compact('products', 'categories'));
     }
 
     /**
@@ -33,32 +65,30 @@ class ProductController extends Controller
     }
 
     /**
-     * Simpan produk, variasi bertingkat, dan foto ke database.
+     * Simpan produk baru.
      */
     public function store(Request $request)
     {
         $request->validate([
-            'name'        => 'required|string|max:255',
-            'description' => 'required|string',
-            'price'       => 'required|numeric|min:0',
-            'category_id' => 'required|exists:categories,id',
-            'collection'  => 'required|string|in:women,men,kids,craft,family', // Tambahan validasi collection
-            'motifs'      => 'required|array|min:1',
-            'motifs.*.name'         => 'required|string',
-            'motifs.*.image'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'motifs.*.sizes'        => 'required|array|min:1',
-            'motifs.*.sizes.*.size' => 'nullable|string',
-            'motifs.*.sizes.*.stock'=> 'required|integer|min:0',
-            'images.*'              => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'name'           => 'required|string|max:255',
+            'description'    => 'required|string',
+            'price'          => 'required|numeric|min:0',
+            'category_id'    => 'required|exists:categories,id',
+            'collection'     => 'required|string|in:Women,Men,Kids,Craft,Family',
+            'motifs'         => 'required|array|min:1',
+            'motifs.*.name'          => 'required|string',
+            'motifs.*.image'         => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'motifs.*.sizes'         => 'required|array|min:1',
+            'motifs.*.sizes.*.size'  => 'nullable|string',
+            'motifs.*.sizes.*.stock' => 'required|integer|min:0',
+            'images.*'               => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
         try {
             DB::beginTransaction();
 
-            // 1. Generate Slug unik
             $slug = Str::slug($request->name) . '-' . time();
 
-            // 2. Hitung Total Stok dari semua variasi motif & ukuran
             $totalStock = 0;
             foreach ($request->motifs as $motif) {
                 foreach ($motif['sizes'] as $size) {
@@ -66,18 +96,16 @@ class ProductController extends Controller
                 }
             }
 
-            // 3. Simpan Produk Utama (Ditambah kolom collection)
             $product = Product::create([
                 'name'        => $request->name,
                 'slug'        => $slug,
                 'description' => $request->description,
                 'price'       => $request->price,
                 'category_id' => $request->category_id,
-                'collection'  => $request->collection, // Simpan collection
+                'collection'  => $request->collection,
                 'stock'       => $totalStock,
             ]);
 
-            // 4. Loop Motif dan Simpan Variasi
             foreach ($request->motifs as $mKey => $motifData) {
                 $motifImagePath = null;
                 if ($request->hasFile("motifs.$mKey.image")) {
@@ -95,7 +123,6 @@ class ProductController extends Controller
                 }
             }
 
-            // 5. Simpan Foto Galeri Tambahan
             if ($request->hasFile('images')) {
                 foreach ($request->file('images') as $index => $file) {
                     $path = $file->store('products/gallery', 'public');
@@ -133,25 +160,23 @@ class ProductController extends Controller
     public function update(Request $request, Product $product)
     {
         $request->validate([
-            'name'        => 'required|string|max:255',
-            'description' => 'required|string',
-            'price'       => 'required|numeric|min:0',
-            'category_id' => 'required|exists:categories,id',
-            'collection'  => 'required|string|in:women,men,kids,craft,family', // Tambahan validasi update
-            'motifs'      => 'required|array|min:1',
-            'motifs.*.name'         => 'required|string',
-            'motifs.*.sizes'        => 'required|array|min:1',
+            'name'         => 'required|string|max:255',
+            'description'  => 'required|string',
+            'price'        => 'required|numeric|min:0',
+            'category_id'  => 'required|exists:categories,id',
+            'collection'   => 'required|string|in:Women,Men,Kids,Craft,Family',
+            'motifs'       => 'required|array|min:1',
+            'motifs.*.name'  => 'required|string',
+            'motifs.*.sizes' => 'required|array|min:1',
         ]);
 
         try {
             DB::beginTransaction();
 
-            // 1. Update Slug jika nama berubah
             if ($request->name !== $product->name) {
                 $product->slug = Str::slug($request->name) . '-' . time();
             }
 
-            // 2. Hitung Total Stok Baru
             $totalStock = 0;
             foreach ($request->motifs as $motif) {
                 foreach ($motif['sizes'] as $size) {
@@ -159,17 +184,15 @@ class ProductController extends Controller
                 }
             }
 
-            // 3. Update Produk Utama (Ditambah kolom collection)
             $product->update([
                 'name'        => $request->name,
                 'description' => $request->description,
                 'price'       => $request->price,
                 'category_id' => $request->category_id,
-                'collection'  => $request->collection, // Update collection
+                'collection'  => $request->collection,
                 'stock'       => $totalStock,
             ]);
 
-            // 4. Update Variasi (Hapus lama, Simpan baru)
             $oldVariants = $product->variants;
             $product->variants()->delete();
 
@@ -194,7 +217,6 @@ class ProductController extends Controller
                 }
             }
 
-            // 5. Tambah Foto Galeri Baru (jika ada)
             if ($request->hasFile('images')) {
                 foreach ($request->file('images') as $file) {
                     $path = $file->store('products/gallery', 'public');
@@ -206,6 +228,12 @@ class ProductController extends Controller
             }
 
             DB::commit();
+
+            // REDIRECT LOGIC: Kembali ke halaman asal (beserta filter) jika ada
+            if ($request->filled('redirect_to')) {
+                return redirect($request->redirect_to)->with('success', 'Produk berhasil diperbarui!');
+            }
+
             return redirect()->route('admin.products.index')->with('success', 'Produk berhasil diperbarui!');
 
         } catch (\Exception $e) {
@@ -215,7 +243,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Hapus produk dan file fisik fotonya.
+     * Hapus produk.
      */
     public function destroy(Product $product)
     {
@@ -230,7 +258,34 @@ class ProductController extends Controller
         }
 
         $product->forceDelete();
+        return redirect()->route('admin.products.index')->with('success', 'Produk berhasil dihapus!');
+    }
 
-        return redirect()->route('admin.products.index')->with('success', 'Produk berhasil dihapus permanen!');
+    /**
+     * Sinkronisasi stok (Panggil saat pembayaran Lunas).
+     */
+    public static function reduceStock($productId, $variantId, $quantity)
+    {
+        DB::transaction(function () use ($productId, $variantId, $quantity) {
+            $variant = ProductVariant::where('id', $variantId)->first();
+            if ($variant) {
+                $variant->decrement('stock', $quantity);
+            }
+
+            $product = Product::find($productId);
+            if ($product) {
+                $product->decrement('stock', $quantity);
+            }
+        });
+    }
+
+    /**
+     * Sinkronisasi ulang total stok.
+     */
+    public function syncTotalStock(Product $product)
+    {
+        $newTotalStock = $product->variants()->sum('stock');
+        $product->update(['stock' => $newTotalStock]);
+        return $newTotalStock;
     }
 }

@@ -1,204 +1,357 @@
-{{-- resources/views/customer/checkout/index.blade.php --}}
 @extends('layouts.customer')
 
 @section('content')
-<div class="max-w-4xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+<div class="min-h-screen bg-[#f5f5f5] text-black">
+    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 min-h-screen text-black">
 
-    {{-- FORM KIRI --}}
-    <div class="lg:col-span-2 space-y-6">
+        <div class="bg-white px-8 lg:px-16 py-10 border-r border-gray-200">
 
-        {{-- Pilih Provinsi & Kota --}}
-        <div class="bg-white rounded-xl border border-stone-200 p-6">
-            <h3 class="font-semibold text-stone-800 mb-4">Alamat Pengiriman</h3>
-
-            <select id="province" class="w-full rounded-lg border border-stone-200 p-2.5 text-sm mb-3">
-                <option value="">-- Pilih Provinsi --</option>
-                @foreach($provinces as $prov)
-                    <option value="{{ $prov['province_id'] }}">{{ $prov['province'] }}</option>
-                @endforeach
-            </select>
-
-            <select id="city" class="w-full rounded-lg border border-stone-200 p-2.5 text-sm mb-3" disabled>
-                <option value="">-- Pilih Kota --</option>
-            </select>
-
-            <textarea id="shipping_address" rows="3"
-                class="w-full rounded-lg border border-stone-200 p-2.5 text-sm"
-                placeholder="Alamat lengkap, nomor rumah, RT/RW..."></textarea>
-        </div>
-
-        {{-- Pilih Kurir --}}
-        <div class="bg-white rounded-xl border border-stone-200 p-6">
-            <h3 class="font-semibold text-stone-800 mb-4">Kurir Pengiriman</h3>
-            <div class="flex gap-3 mb-4">
-                @foreach(['jne' => 'JNE', 'jnt' => 'J&T', 'pos' => 'Pos Indonesia'] as $val => $label)
-                <button type="button" data-courier="{{ $val }}"
-                    class="courier-btn flex-1 py-2 rounded-lg border border-stone-200 text-sm
-                           text-stone-600 hover:border-stone-800 transition-colors">
-                    {{ $label }}
-                </button>
-                @endforeach
+            <div class="mb-6">
+                <h1 class="text-5xl font-black tracking-[14px] text-black">
+                    BATIK
+                </h1>
             </div>
 
-            {{-- Hasil ongkir muncul di sini --}}
-            <div id="shipping-options" class="space-y-2 hidden"></div>
-            <p id="shipping-loading" class="text-sm text-stone-400 hidden">Menghitung ongkir...</p>
-        </div>
-    </div>
-
-    {{-- RINGKASAN ORDER KANAN --}}
-    <div class="space-y-4">
-        <div class="bg-white rounded-xl border border-stone-200 p-5 sticky top-6">
-            <h3 class="font-semibold text-stone-800 mb-4">Ringkasan Pesanan</h3>
-
-            @foreach($cartItems as $item)
-            <div class="flex justify-between text-sm mb-2">
-                <span class="text-stone-600">{{ $item->product->name }} ×{{ $item->quantity }}</span>
-                <span>Rp {{ number_format($item->product->price * $item->quantity, 0, ',', '.') }}</span>
-            </div>
-            @endforeach
-
-            <div class="border-t border-stone-100 mt-3 pt-3 flex justify-between text-sm">
-                <span class="text-stone-500">Ongkir</span>
-                <span id="display-shipping">Rp 0</span>
-            </div>
-            <div class="flex justify-between font-semibold mt-2">
-                <span>Total</span>
-                <span id="display-total">Rp {{ number_format($cartItems->sum(fn($i) => $i->product->price * $i->quantity), 0, ',', '.') }}</span>
+            <div class="flex items-center gap-3 text-sm text-gray-400 mb-10">
+                <a href="{{ route('customer.cart.index') }}" class="hover:text-black transition-all">
+                    Cart
+                </a>
+                <span>›</span>
+                <span class="font-semibold text-black">
+                    Information & Shipping
+                </span>
+                <span>›</span>
+                <span class="text-gray-300">
+                    Payment
+                </span>
             </div>
 
-            <button id="btn-bayar"
-                class="mt-5 w-full bg-stone-900 text-amber-200 rounded-lg py-3 text-sm
-                       font-medium hover:bg-stone-800 transition-colors disabled:opacity-50
-                       disabled:cursor-not-allowed"
-                disabled>
-                Bayar Sekarang
-            </button>
-        </div>
-    </div>
-</div>
-@endsection
-
-@push('scripts')
-<script src="{{ config('services.midtrans.snap_url') }}"
-        data-client-key="{{ config('services.midtrans.client_key') }}"></script>
-
-<script>
-const subtotal = {{ $cartItems->sum(fn($i) => $i->product->price * $i->quantity) }};
-let selectedShipping = null;
-
-// === Dinamis kota berdasarkan provinsi ===
-document.getElementById('province').addEventListener('change', async function () {
-    const cityEl = document.getElementById('city');
-    cityEl.disabled = true;
-    cityEl.innerHTML = '<option>Memuat kota...</option>';
-
-    const res = await fetch(`/shipping/cities?province_id=${this.value}`);
-    const cities = await res.json();
-
-    cityEl.innerHTML = '<option value="">-- Pilih Kota --</option>' +
-        cities.map(c => `<option value="${c.city_id}">${c.city_name}</option>`).join('');
-    cityEl.disabled = false;
-});
-
-// === Hitung ongkir saat kota & kurir dipilih ===
-async function fetchShippingCost(courier) {
-    const cityId = document.getElementById('city').value;
-    if (!cityId) return;
-
-    document.getElementById('shipping-loading').classList.remove('hidden');
-    document.getElementById('shipping-options').classList.add('hidden');
-
-    const res = await fetch('/shipping/cost', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-        },
-        body: JSON.stringify({ destination_city_id: cityId, courier })
-    });
-
-    const options = await res.json();
-    const container = document.getElementById('shipping-options');
-
-    container.innerHTML = options.map(opt => `
-        <label class="flex items-center justify-between p-3 rounded-lg border border-stone-200
-                       cursor-pointer hover:border-stone-800 transition-colors has-[:checked]:border-stone-800
-                       has-[:checked]:bg-stone-50">
-            <div class="flex items-center gap-3">
-                <input type="radio" name="shipping" value="${opt.cost}"
-                       data-service="${opt.service}" class="shipping-radio">
-                <div>
-                    <p class="text-sm font-medium">${courier.toUpperCase()} ${opt.service}</p>
-                    <p class="text-xs text-stone-400">Estimasi ${opt.etd}</p>
+            <div class="mb-10">
+                <h2 class="text-3xl font-bold mb-5 text-black">
+                    Contact
+                </h2>
+                <div class="text-gray-700">
+                    {{ auth()->user()->name }} ({{ auth()->user()->email }})
                 </div>
             </div>
-            <span class="text-sm font-medium">Rp ${opt.cost.toLocaleString('id-ID')}</span>
-        </label>
-    `).join('');
 
-    document.querySelectorAll('.shipping-radio').forEach(radio => {
-        radio.addEventListener('change', function () {
-            selectedShipping = {
-                cost: parseInt(this.value),
-                service: this.dataset.service,
-                courier: courier,
-            };
-            updateTotal();
-            document.getElementById('btn-bayar').disabled = false;
+            <div>
+                <h2 class="text-3xl font-bold mb-6 text-black">
+                    Shipping address
+                </h2>
+
+                <div class="space-y-5">
+
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-black">
+                            Nama Penerima
+                        </label>
+                        <input type="text" id="receiver_name" value="{{ auth()->user()->name }}"
+                            class="w-full border border-gray-300 rounded-lg px-4 py-4 text-black bg-white focus:outline-none focus:ring-2 focus:ring-black"
+                            placeholder="Nama penerima">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-black">
+                            Nomor Telepon
+                        </label>
+                        <input type="text" id="phone"
+                            class="w-full border border-gray-300 rounded-lg px-4 py-4 text-black bg-white focus:outline-none focus:ring-2 focus:ring-black"
+                            placeholder="08xxxxxxxxxx">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-black">
+                            Provinsi
+                        </label>
+                        <select id="shipping_province"
+                            class="w-full border border-gray-300 rounded-lg px-4 py-4 text-black bg-white focus:outline-none focus:ring-2 focus:ring-black">
+                            <option value="">Pilih Provinsi Tujuan</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-black">
+                            Kota / Kabupaten
+                        </label>
+                        <select id="shipping_city" disabled
+                            class="w-full border border-gray-300 rounded-lg px-4 py-4 text-black bg-white focus:outline-none focus:ring-2 focus:ring-black">
+                            <option value="">Pilih Kota Tujuan</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-black">
+                            Kecamatan
+                        </label>
+                        <select id="shipping_district" disabled
+                            class="w-full border border-gray-300 rounded-lg px-4 py-4 text-black bg-white focus:outline-none focus:ring-2 focus:ring-black">
+                            <option value="">Pilih Kecamatan Tujuan</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-black">
+                            Kode Pos
+                        </label>
+                        <input type="text" id="postal_code"
+                            class="w-full border border-gray-300 rounded-lg px-4 py-4 text-black bg-white focus:outline-none focus:ring-2 focus:ring-black"
+                            placeholder="Kode Pos">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-black">
+                            Alamat Lengkap
+                        </label>
+                        <textarea id="shipping_address" rows="4" placeholder="Nama jalan, RT/RW, nomor rumah, atau patokan detail..."
+                            class="w-full border border-gray-300 rounded-lg px-4 py-4 text-black bg-white focus:outline-none focus:ring-2 focus:ring-black"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-black">
+                            Opsi Pengiriman Ekonomi Termurah
+                        </label>
+                        <div id="cheapest_delivery_info" class="w-full border border-dashed border-gray-300 bg-gray-50 rounded-lg p-4 text-sm text-gray-500 italic">
+                            Silakan lengkapi wilayah pengiriman untuk mencari ongkir terbaik...
+                        </div>
+                    </div>
+
+                    <div class="pt-6 flex items-center justify-between">
+                        <a href="{{ route('customer.cart.index') }}" class="text-sm text-gray-500 hover:text-black">
+                            ← Return to cart
+                        </a>
+                        <button id="checkout-button"
+                            class="bg-black hover:bg-gray-900 text-white px-10 py-4 rounded-lg font-semibold transition-all">
+                            Continue to payment
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-[#fafafa] px-8 lg:px-12 py-10">
+            <div class="space-y-8">
+                @php $subtotal = 0; @endphp
+
+                @foreach($cartItems as $item)
+                    @php
+                        $itemTotal = $item->product->price * $item->quantity;
+                        $subtotal += $itemTotal;
+                    @endphp
+
+                    <div class="flex justify-between items-start gap-4">
+                        <div class="flex gap-4">
+                            <div class="relative w-20 h-20 bg-white border rounded-lg overflow-hidden flex-shrink-0">
+                                <img src="{{ asset('storage/' . ($item->variant->image_path ?? 'placeholder.jpg')) }}"
+                                     class="w-full h-full object-cover">
+                                <span class="absolute -top-2 -right-2 bg-black text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center">
+                                    {{ $item->quantity }}
+                                </span>
+                            </div>
+
+                            <div>
+                                <h3 class="font-medium text-sm leading-5 max-w-[230px] text-black">
+                                    {{ $item->product->name }}
+                                </h3>
+                                <p class="text-sm text-gray-400 mt-1">
+                                    {{ $item->product->category->name ?? 'Batik' }} 
+                                    @if($item->variant) • {{ $item->variant->motif }} ({{ $item->variant->size }}) @endif
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="font-medium whitespace-nowrap text-black">
+                            Rp {{ number_format($itemTotal,0,',','.') }}
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="mt-10 border-t border-gray-300 pt-8 space-y-4">
+                <div class="flex justify-between text-gray-700">
+                    <span>Subtotal</span>
+                    <span>Rp {{ number_format($subtotal,0,',','.') }}</span>
+                </div>
+
+                <div class="flex justify-between text-gray-700">
+                    <span>Shipping</span>
+                    <span id="shipping-cost">Rp 0</span>
+                </div>
+
+                <div class="border-t border-gray-300 pt-6 flex justify-between items-center">
+                    <div>
+                        <span class="text-3xl font-bold text-black">Total</span>
+                    </div>
+
+                    <div class="text-right">
+                        <div class="text-xs text-gray-400 uppercase">IDR</div>
+                        <div id="grand-total" data-subtotal="{{ $subtotal }}" class="text-4xl font-black text-black">
+                            Rp {{ number_format($subtotal,0,',','.') }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="{{ config('services.midtrans.client_key') }}"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<script>
+$(document).ready(function () {
+
+    // Variable global penyimpan data kurir termurah hasil kalkulasi server
+    let selectedCourierName = "";
+    let selectedCourierService = "";
+    let selectedCourierCost = 0;
+
+    // 1. AJAX FETCH ALL PROVINCES ON INITIAL LOAD
+    $.get("{{ route('api.provinces') }}", function (data) {
+        $.each(data, function (key, value) {
+            $('#shipping_province').append('<option value="' + value.id + '">' + value.name + '</option>');
         });
     });
 
-    document.getElementById('shipping-loading').classList.add('hidden');
-    container.classList.remove('hidden');
-}
+    // 2. CHAINED FILTER: FETCH CITIES ON PROVINCE CHANGE
+    $('#shipping_province').change(function () {
+        let provinceId = $(this).val();
+        $('#shipping_city').empty().append('<option value="">Pilih Kota Tujuan</option>').prop('disabled', true);
+        $('#shipping_district').empty().append('<option value="">Pilih Kecamatan Tujuan</option>').prop('disabled', true);
+        resetShippingCost();
 
-// === Pilih kurir ===
-document.querySelectorAll('.courier-btn').forEach(btn => {
-    btn.addEventListener('click', function () {
-        document.querySelectorAll('.courier-btn').forEach(b => b.classList.remove('border-stone-800', 'bg-stone-50'));
-        this.classList.add('border-stone-800', 'bg-stone-50');
-        fetchShippingCost(this.dataset.courier);
-    });
-});
-
-// === Update total ===
-function updateTotal() {
-    if (!selectedShipping) return;
-    const total = subtotal + selectedShipping.cost;
-    document.getElementById('display-shipping').textContent = 'Rp ' + selectedShipping.cost.toLocaleString('id-ID');
-    document.getElementById('display-total').textContent = 'Rp ' + total.toLocaleString('id-ID');
-}
-
-// === Proses pembayaran via Midtrans Snap ===
-document.getElementById('btn-bayar').addEventListener('click', async function () {
-    this.disabled = true;
-    this.textContent = 'Memproses...';
-
-    const res = await fetch('/checkout/process', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-        },
-        body: JSON.stringify({
-            shipping_address:    document.getElementById('shipping_address').value,
-            destination_city_id: document.getElementById('city').value,
-            courier:             selectedShipping.courier,
-            courier_service:     selectedShipping.service,
-            shipping_cost:       selectedShipping.cost,
-        })
+        if (provinceId) {
+            $.get("/api/cities/" + provinceId, function (data) {
+                $('#shipping_city').prop('disabled', false);
+                $.each(data, function (key, value) {
+                    $('#shipping_city').append('<option value="' + value.id + '">' + value.name + '</option>');
+                });
+            });
+        }
     });
 
-    const data = await res.json();
+    // 3. CHAINED FILTER: FETCH DISTRICTS ON CITY CHANGE
+    $('#shipping_city').change(function () {
+        let cityId = $(this).val();
+        $('#shipping_district').empty().append('<option value="">Pilih Kecamatan Tujuan</option>').prop('disabled', true);
+        resetShippingCost();
 
-    // Buka popup Midtrans Snap
-    snap.pay(data.snap_token, {
-        onSuccess: (result) => window.location.href = '/checkout/finish?order_id=' + result.order_id,
-        onPending: (result) => window.location.href = '/checkout/finish?order_id=' + result.order_id,
-        onError:   ()       => alert('Pembayaran gagal, silakan coba lagi.'),
-        onClose:   ()       => { this.disabled = false; this.textContent = 'Bayar Sekarang'; },
+        if (cityId) {
+            $.get("/api/districts/" + cityId, function (data) {
+                $('#shipping_district').prop('disabled', false);
+                $.each(data, function (key, value) {
+                    $('#shipping_district').append('<option value="' + value.id + '" data-postal="' + value.postal_code + '">' + value.name + '</option>');
+                });
+            });
+        }
+    });
+
+    // 4. AUTOSET POSTAL CODE & TRIGGER AMBIL TARIF TERMURAH (TEPAT 1 KALI HIT)
+    $('#shipping_district').change(function () {
+        let postalCode = $(this).find(':selected').data('postal');
+        if (postalCode) {
+            $('#postal_code').val(postalCode);
+        }
+        
+        let districtId = $(this).val();
+        if (districtId) {
+            fetchCheapestShipping(districtId);
+        } else {
+            resetShippingCost();
+        }
+    });
+
+    // Fungsi tunggal menerima hasil kalkulasi terbersih dari Server-Side Controller
+    function fetchCheapestShipping(districtId) {
+        $('#cheapest_delivery_info').removeClass('text-green-600 font-semibold').addClass('text-gray-500 italic').html('⏳ Memeriksa opsi kurir terbaik & termurah...');
+        
+        $.post("{{ route('api.check-cost') }}", {
+            _token: "{{ csrf_token() }}",
+            district_id: districtId,
+            weight: 1000
+        }, function (cheapest) {
+            if (cheapest && cheapest.cost) {
+                // Set data bersih langsung dari respon server ke global variabel sistem checkout
+                selectedCourierName = cheapest.courier;
+                selectedCourierService = cheapest.service;
+                selectedCourierCost = cheapest.cost;
+
+                // Render detail info teks kurir otomatis di UI
+                let etdString = cheapest.etd ? ' (' + cheapest.etd + ')' : '';
+                $('#cheapest_delivery_info')
+                    .removeClass('text-gray-500 italic')
+                    .addClass('text-green-700 font-medium bg-green-50 border-green-300')
+                    .html('✅ Terpilih Otomatis: <strong>' + selectedCourierName + ' - ' + selectedCourierService + '</strong>' + etdString + ' — <strong>Rp ' + selectedCourierCost.toLocaleString('id-ID') + '</strong>');
+
+                // Update Ringkasan Total Tagihan di Sebelah Kanan
+                let subtotal = parseInt($('#grand-total').data('subtotal'));
+                $('#shipping-cost').text('Rp ' + selectedCourierCost.toLocaleString('id-ID'));
+                $('#grand-total').text('Rp ' + (subtotal + selectedCourierCost).toLocaleString('id-ID'));
+            } else {
+                $('#cheapest_delivery_info').html('❌ Layanan pengiriman tidak tersedia untuk rute wilayah ini.');
+            }
+        }).fail(function() {
+            $('#cheapest_delivery_info').html('❌ Terjadi kendala saat menghubungkan data pengiriman.');
+        });
+    }
+
+    function resetShippingCost() {
+        selectedCourierName = "";
+        selectedCourierService = "";
+        selectedCourierCost = 0;
+        $('#cheapest_delivery_info').removeClass('bg-green-50 border-green-300').addClass('bg-gray-50 border-gray-300 text-gray-500 italic').html('Silakan lengkapi wilayah pengiriman untuk mencari ongkir terbaik...');
+        $('#shipping-cost').text('Rp 0');
+        $('#grand-total').text('Rp ' + parseInt($('#grand-total').data('subtotal')).toLocaleString('id-ID'));
+    }
+
+    // 5. SECURE AJAX FORM CHECKOUT AND MIDTRANS CALL SNAP OPENER
+    $('#checkout-button').click(function () {
+        let province = $('#shipping_province option:selected').text();
+        let city = $('#shipping_city option:selected').text();
+        let district = $('#shipping_district option:selected').text();
+        let postal = $('#postal_code').val();
+        let detailAddress = $('#shipping_address').val();
+        let phone = $('#phone').val();
+
+        if (!district || !detailAddress || !phone || selectedCourierCost === 0) {
+            alert('Harap isi nomor telepon, lengkapi alamat, dan tunggu hingga sistem otomatis mendeteksi tarif kurir termurah!');
+            return;
+        }
+
+        let formattedFullAddress = detailAddress + ", Kec. " + district + ", " + city + ", Prov. " + province + " (" + postal + ") — Telp: " + phone;
+
+        $.ajax({
+            url: "{{ route('customer.checkout.process') }}",
+            type: "POST",
+            data: {
+                _token: "{{ csrf_token() }}",
+                shipping_address: formattedFullAddress,
+                courier: selectedCourierName,
+                courier_service: selectedCourierService,
+                shipping_cost: selectedCourierCost,
+            },
+            success: function (response) {
+                if (response.snap_token) {
+                    snap.pay(response.snap_token, {
+                        onSuccess: function(result) {
+                            window.location.href = "/checkout/finish?order_id=" + response.order_code;
+                        },
+                        onPending: function(result) {
+                            window.location.href = "/checkout/finish?order_id=" + response.order_code;
+                        },
+                        onError: function(result) {
+                            alert('Proses Pembayaran Gagal, Silakan Cek Riwayat Menu Transaksi.');
+                        }
+                    });
+                }
+            },
+            error: function (xhr) {
+                alert('Sistem Gagal Memproses Checkout: ' + xhr.responseText);
+            }
+        });
     });
 });
 </script>
-@endpush
+@endsection
