@@ -4,6 +4,11 @@
 
 @section('content')
 
+{{-- Style khusus untuk transisi halus UI Alpine.js --}}
+<style>
+    [x-cloak] { display: none !important; }
+</style>
+
 {{-- Stat Cards Lengkap Sesuai Struktur Database ENUM Status --}}
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
     <div class="bg-white rounded-xl border border-stone-200 p-4 shadow-sm">
@@ -45,7 +50,7 @@
             @endphp
 
             @foreach($statuses as $i => $s)
-                <a href="{{ route('admin.orders.index', array_merge(request()->query(), ['status' => $s])) }}"
+                <a href="{{ route('admin.orders.index', array_merge(request()->except(['page', 'status']), $s ? ['status' => $s] : [])) }}"
                    class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all
                           {{ request('status', '') === $s
                              ? 'bg-stone-900 text-amber-200 shadow-sm'
@@ -142,17 +147,43 @@
                         <p class="text-stone-400 italic text-sm">Data transaksi pesanan tidak ditemukan.</p>
                     </td>
                 </tr>
-                {{-- PERBAIKAN: Mengganti @endforeach menjadi @endforelse agar sinkron dengan pasangannya --}}
                 @endforelse
 
             </tbody>
         </table>
     </div>
 
-    {{-- Pagination --}}
+    {{-- UI Pagination Premium Kustomisasi Sempurna --}}
     @if($orders->hasPages())
-    <div class="px-5 py-4 border-t border-stone-100 bg-stone-50/30">
-        {{ $orders->links() }}
+    <div class="px-6 py-4 border-t border-stone-100 bg-stone-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="text-xs font-semibold text-stone-400 uppercase tracking-wider">
+            Menampilkan <span class="text-[#1a1a2e] font-black">{{ $orders->firstItem() }}</span> - <span class="text-[#1a1a2e] font-black">{{ $orders->lastItem() }}</span> dari <span class="text-[#1a1a2e] font-black">{{ $orders->total() }}</span> Pesanan
+        </div>
+        <div class="flex items-center gap-1">
+            {{-- Tombol Previous --}}
+            @if ($orders->onFirstPage())
+                <span class="px-3 py-2 bg-gray-100 text-gray-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Prev</span>
+            @else
+                <a href="{{ $orders->appends(request()->query())->previousPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-600 hover:border-[#1a1a2e] hover:text-[#1a1a2e] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm">Prev</a>
+            @endif
+
+            {{-- Nomor Halaman Dinamis --}}
+            <div class="hidden sm:flex items-center gap-1">
+                @foreach ($orders->getUrlRange(max(1, $orders->currentPage() - 2), min($orders->lastPage(), $orders->currentPage() + 2)) as $page => $url)
+                    <a href="{{ $url . '&' . http_build_query(request()->except('page')) }}" 
+                       class="w-9 h-9 flex items-center justify-center rounded-xl text-xs font-bold transition-all border {{ $page == $orders->currentPage() ? 'bg-[#1a1a2e] text-[#e8c9a0] border-[#1a1a2e] font-black shadow-md shadow-[#1a1a2e]/10' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400' }}">
+                        {{ $page }}
+                    </a>
+                @endforeach
+            </div>
+
+            {{-- Tombol Next --}}
+            @if ($orders->hasMorePages())
+                <a href="{{ $orders->appends(request()->query())->nextPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-600 hover:border-[#1a1a2e] hover:text-[#1a1a2e] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm">Next</a>
+            @else
+                <span class="px-3 py-2 bg-gray-100 text-gray-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Next</span>
+            @endif
+        </div>
     </div>
     @endif
 

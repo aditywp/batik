@@ -37,7 +37,7 @@ class ProductController extends Controller
             $query->where('collection', $request->collection);
         }
 
-        // 5. TAMBAHAN BARU: Logika Filter Kondisi/Status Stok
+        // 5. Logika Filter Kondisi/Status Stok
         if ($request->filled('stock_status')) {
             if ($request->stock_status === 'empty') {
                 $query->where('stock', '=', 0);
@@ -46,12 +46,12 @@ class ProductController extends Controller
             }
         }
 
-        // 6. Eksekusi Pagination (12 produk agar rapi di tampilan Grid)
-        $products = $query->paginate(12)->withQueryString();
-        
-        // 7. Ambil semua kategori untuk isi dropdown filter di View
+        // KUNCI PERBAIKAN: Tarik data kategori agar variabel $categories terdefinisi dan tidak memicu crash di Blade!
         $categories = Category::all();
 
+        // 6. Eksekusi Pagination (12 produk agar rapi di tampilan Grid kelipatan 4 kolom)
+        $products = $query->paginate(12)->withQueryString(); 
+            
         return view('admin.products.index', compact('products', 'categories'));
     }
 
@@ -76,9 +76,9 @@ class ProductController extends Controller
             'category_id'    => 'required|exists:categories,id',
             'collection'     => 'required|string|in:Women,Men,Kids,Craft,Family',
             'motifs'         => 'required|array|min:1',
-            'motifs.*.name'          => 'required|string',
-            'motifs.*.image'         => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'motifs.*.sizes'         => 'required|array|min:1',
+            'motifs.*.name'  => 'required|string',
+            'motifs.*.image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'motifs.*.sizes' => 'required|array|min:1',
             'motifs.*.sizes.*.size'  => 'nullable|string',
             'motifs.*.sizes.*.stock' => 'required|integer|min:0',
             'images.*'               => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
@@ -229,7 +229,7 @@ class ProductController extends Controller
 
             DB::commit();
 
-            // REDIRECT LOGIC: Kembali ke halaman asal (beserta filter) jika ada
+            // REDIRECT LOGIC: Kembali ke halaman asal beserta query filter (pencarian/halaman) jika ada
             if ($request->filled('redirect_to')) {
                 return redirect($request->redirect_to)->with('success', 'Produk berhasil diperbarui!');
             }

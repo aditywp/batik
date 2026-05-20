@@ -6,16 +6,16 @@
     [x-cloak] { display: none !important; }
 </style>
 
-{{-- PERBAIKAN: x-data dibuat seringkas mungkin agar tidak ada konflik tanda petik di HTML --}}
+{{-- Alpine Data membaca mode dari URL agar konsisten saat pindah halaman (Sticky Mode) --}}
 <div class="container mx-auto p-6 font-sans" x-data="{ 
-    viewMode: 'table', 
+    viewMode: new URLSearchParams(window.location.search).get('viewMode') || 'table', 
     showDetail: false, 
     selectedProduct: {},
     activeImage: '',
     selectedMotif: null,
     selectedSize: null
 }">
-    {{-- HEADER --}}
+    {{-- HEADER MANAGEMENT DAFTAR PRODUK --}}
     <div class="flex justify-between items-center mb-8">
         <div>
             <h1 class="text-3xl font-black text-[#1a1a2e] tracking-tight uppercase italic">Daftar Produk Batik</h1>
@@ -23,18 +23,18 @@
         </div>
 
         <div class="flex items-center gap-4">
-            {{-- Tombol Switch View --}}
+            {{-- Tombol Switch View Mode (Menyimpan status langsung ke URL agar Sticky) --}}
             <div class="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
-                <button @click="viewMode = 'table'" 
+                <button @click="viewMode = 'table'; window.history.pushState({}, '', '?viewMode=table')" 
                         :class="viewMode === 'table' ? 'bg-white shadow-sm text-[#1a1a2e]' : 'text-gray-500'"
                         class="px-3 py-1.5 rounded-md transition-all flex items-center gap-2 text-sm font-medium">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
                     Tabel
                 </button>
-                <button @click="viewMode = 'grid'" 
+                <button @click="viewMode = 'grid'; window.history.pushState({}, '', '?viewMode=grid')" 
                         :class="viewMode === 'grid' ? 'bg-white shadow-sm text-[#1a1a2e]' : 'text-gray-500'"
                         class="px-3 py-1.5 rounded-md transition-all flex items-center gap-2 text-sm font-medium">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
                     Kartu
                 </button>
             </div>
@@ -45,9 +45,11 @@
         </div>
     </div>
 
-    {{-- BAGIAN FILTER & PENCARIAN --}}
+    {{-- PANEL FILTER UTILITY SEARCH & DROPDOWN --}}
     <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-8">
         <form action="{{ route('admin.products.index') }}" method="GET" class="flex flex-wrap items-end gap-4">
+            {{-- Menyisipkan parameter viewMode ke request form agar filter tidak merusak tampilan --}}
+            <input type="hidden" name="viewMode" :value="viewMode">
             
             <div class="flex-1 min-w-[200px]">
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Cari Nama Produk</label>
@@ -101,7 +103,7 @@
                     Filter
                 </button>
                 @if(request()->anyFilled(['search', 'category', 'collection', 'stock_status']))
-                    <a href="{{ route('admin.products.index') }}" 
+                    <a href="{{ route('admin.products.index', ['viewMode' => request('viewMode', 'table')]) }}" 
                        class="px-4 py-2.5 text-xs font-black text-red-500 hover:bg-red-50 rounded-xl transition-colors flex items-center h-11 uppercase tracking-widest">
                         Reset
                     </a>
@@ -110,8 +112,8 @@
         </form>
     </div>
 
-    {{-- TAMPILAN 1: TABEL --}}
-    <div x-show="viewMode === 'table'" x-transition class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    {{-- TAMPILAN 1: STRUKTUR DATA TABEL --}}
+    <div x-show="viewMode === 'table'" x-transition class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
         <table class="w-full text-left">
             <thead class="bg-gray-50 border-b border-gray-100">
                 <tr>
@@ -122,7 +124,7 @@
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-50">
-                @foreach($products as $product)
+                @forelse($products as $product)
                 <tr class="hover:bg-gray-50/50 transition-colors cursor-pointer" 
                     @click="selectedProduct = {{ $product->load(['category', 'images', 'variants'])->toJson() }}; 
                             activeImage = selectedProduct.variants?.[0]?.image_path || selectedProduct.images?.[0]?.image_path; 
@@ -153,7 +155,6 @@
                         <div class="flex justify-center items-center gap-4">
                             <a href="{{ route('admin.products.edit', [$product->id, 'redirect_to' => request()->fullUrl()]) }}" class="text-blue-500 hover:text-blue-700 font-bold text-xs uppercase tracking-wider">Edit</a>
                             
-                            {{-- Button Tong Sampah Tabel Terikat Fungsi Global --}}
                             <button type="button" @click.stop="triggerDelete({{ $product->id }})" class="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -162,56 +163,123 @@
                         </div>
                     </td>
                 </tr>
-                @endforeach
+                @empty
+                <tr>
+                    <td colspan="4" class="p-10 text-center text-gray-400 italic text-sm">Tidak ada produk batik yang terdaftar.</td>
+                </tr>
+                @endforelse
             </tbody>
         </table>
-    </div>
 
-    {{-- TAMPILAN 2: KARTU (GRID) --}}
-    <div x-show="viewMode === 'grid'" x-transition class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        @foreach($products as $product)
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-md transition-all cursor-pointer"
-             @click="selectedProduct = {{ $product->load(['category', 'images', 'variants'])->toJson() }}; 
-                     activeImage = selectedProduct.variants?.[0]?.image_path || selectedProduct.images?.[0]?.image_path; 
-                     selectedMotif = selectedProduct.variants?.[0]?.motif;
-                     selectedSize = null;
-                     showDetail = true">
-            <div class="relative aspect-square">
-                <img src="{{ asset('storage/' . ($product->variants->first()->image_path ?? 'placeholder.jpg')) }}" 
-                     class="w-full h-full object-cover">
-                <div class="absolute top-3 right-3">
-                    @if($product->stock == 0)
-                        <span class="px-2 py-1 bg-red-600 text-white text-[10px] font-black rounded-lg shadow-sm uppercase">Habis</span>
-                    @elseif($product->stock <= 5)
-                        <span class="px-2 py-1 bg-orange-500 text-white text-[10px] font-black rounded-lg shadow-sm uppercase">Sisa {{ $product->stock }}</span>
+        {{-- PAGINATION PRESTIGE UNTUK TAMPILAN TABEL --}}
+        @if($products->hasPages())
+            <div x-show="viewMode === 'table'" class="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Menampilkan <span class="text-[#1a1a2e] font-black">{{ $products->firstItem() }}</span> - <span class="text-[#1a1a2e] font-black">{{ $products->lastItem() }}</span> dari <span class="text-[#1a1a2e] font-black">{{ $products->total() }}</span> Laporan
+                </div>
+                <div class="flex items-center gap-1">
+                    @if ($products->onFirstPage())
+                        <span class="px-3 py-2 bg-gray-100 text-gray-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Prev</span>
                     @else
-                        <span class="px-2 py-1 bg-white/90 backdrop-blur-sm text-[#1a1a2e] text-[10px] font-bold rounded-lg shadow-sm">{{ $product->stock }} pcs</span>
+                        <a href="{{ $products->appends(['viewMode' => 'table'])->previousPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-600 hover:border-[#1a1a2e] hover:text-[#1a1a2e] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm">Prev</a>
+                    @endif
+
+                    <div class="hidden sm:flex items-center gap-1">
+                        @foreach ($products->getUrlRange(max(1, $products->currentPage() - 2), min($products->lastPage(), $products->currentPage() + 2)) as $page => $url)
+                            <a href="{{ $url . '&viewMode=table' }}" 
+                               class="w-9 h-9 flex items-center justify-center rounded-xl text-xs font-bold transition-all border {{ $page == $products->currentPage() ? 'bg-[#1a1a2e] text-[#e8c9a0] border-[#1a1a2e] font-black shadow-md shadow-[#1a1a2e]/10' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400' }}">
+                                {{ $page }}
+                            </a>
+                        @endforeach
+                    </div>
+
+                    @if ($products->hasMorePages())
+                        <a href="{{ $products->appends(['viewMode' => 'table'])->nextPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-600 hover:border-[#1a1a2e] hover:text-[#1a1a2e] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm">Next</a>
+                    @else
+                        <span class="px-3 py-2 bg-gray-100 text-gray-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Next</span>
                     @endif
                 </div>
             </div>
-            <div class="p-4">
-                <p class="text-[10px] text-gray-400 uppercase tracking-widest mb-1">{{ $product->category->name ?? 'Batik' }} • {{ $product->collection }}</p>
-                <h3 class="font-bold text-[#1a1a2e] mb-2 truncate">{{ $product->name }}</h3>
-                <p class="text-emerald-600 font-bold mb-4">Rp {{ number_format($product->price, 0, ',', '.') }}</p>
-                
-                <div class="flex items-center gap-2 border-t border-gray-50 pt-4" @click.stop>
-                    <a href="{{ route('admin.products.edit', [$product->id, 'redirect_to' => request()->fullUrl()]) }}" class="flex-1 text-center py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors">
-                        Edit
-                    </a>
-                    
-                    {{-- Button Tong Sampah Kartu Terikat Fungsi Global --}}
-                    <button type="button" @click.stop="triggerDelete({{ $product->id }})" class="px-3 py-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-all flex items-center justify-center">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        </div>
-        @endforeach
+        @endif
     </div>
 
-    {{-- MODAL DETAIL (Alpine.js) --}}
+    {{-- TAMPILAN 2: GRID KARTU KREATIVITAS --}}
+    <div x-show="viewMode === 'grid'" x-transition class="space-y-8">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            @foreach($products as $product)
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-md transition-all cursor-pointer"
+                 @click="selectedProduct = {{ $product->load(['category', 'images', 'variants'])->toJson() }}; 
+                         activeImage = selectedProduct.variants?.[0]?.image_path || selectedProduct.images?.[0]?.image_path; 
+                         selectedMotif = selectedProduct.variants?.[0]?.motif;
+                         selectedSize = null;
+                         showDetail = true">
+                <div class="relative aspect-square">
+                    <img src="{{ asset('storage/' . ($product->variants->first()->image_path ?? 'placeholder.jpg')) }}" 
+                         class="w-full h-full object-cover">
+                    <div class="absolute top-3 right-3">
+                        @if($product->stock == 0)
+                            <span class="px-2 py-1 bg-red-600 text-white text-[10px] font-black rounded-lg shadow-sm uppercase">Habis</span>
+                        @elseif($product->stock <= 5)
+                            <span class="px-2 py-1 bg-orange-500 text-white text-[10px] font-black rounded-lg shadow-sm uppercase">Sisa {{ $product->stock }}</span>
+                        @else
+                            <span class="px-2 py-1 bg-white/90 backdrop-blur-sm text-[#1a1a2e] text-[10px] font-bold rounded-lg shadow-sm">{{ $product->stock }} pcs</span>
+                        @endif
+                    </div>
+                </div>
+                <div class="p-4">
+                    <p class="text-[10px] text-gray-400 uppercase tracking-widest mb-1">{{ $product->category->name ?? 'Batik' }} • {{ $product->collection }}</p>
+                    <h3 class="font-bold text-[#1a1a2e] mb-2 truncate">{{ $product->name }}</h3>
+                    <p class="text-emerald-600 font-bold mb-4">Rp {{ number_format($product->price, 0, ',', '.') }}</p>
+                    
+                    <div class="flex items-center gap-2 border-t border-gray-50 pt-4" @click.stop>
+                        <a href="{{ route('admin.products.edit', [$product->id, 'redirect_to' => request()->fullUrl()]) }}" class="flex-1 text-center py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors">
+                            Edit
+                        </a>
+                        
+                        <button type="button" @click.stop="triggerDelete({{ $product->id }})" class="px-3 py-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-all flex items-center justify-center">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            @endforeach
+        </div>
+
+        {{-- PAGINATION PRESTIGE UNTUK TAMPILAN KARTU (GRID) --}}
+        @if($products->hasPages())
+            <div x-show="viewMode === 'grid'" class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
+                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Menampilkan <span class="text-[#1a1a2e] font-black">{{ $products->firstItem() }}</span> - <span class="text-[#1a1a2e] font-black">{{ $products->lastItem() }}</span> dari <span class="text-[#1a1a2e] font-black">{{ $products->total() }}</span> Laporan
+                </div>
+                <div class="flex items-center gap-1">
+                    @if ($products->onFirstPage())
+                        <span class="px-3 py-2 bg-gray-100 text-gray-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Prev</span>
+                    @else
+                        <a href="{{ $products->appends(['viewMode' => 'grid'])->previousPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-600 hover:border-[#1a1a2e] hover:text-[#1a1a2e] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm">Prev</a>
+                    @endif
+
+                    <div class="hidden sm:flex items-center gap-1">
+                        @foreach ($products->getUrlRange(max(1, $products->currentPage() - 2), min($products->lastPage(), $products->currentPage() + 2)) as $page => $url)
+                            <a href="{{ $url . '&viewMode=grid' }}" 
+                               class="w-9 h-9 flex items-center justify-center rounded-xl text-xs font-bold transition-all border {{ $page == $products->currentPage() ? 'bg-[#1a1a2e] text-[#e8c9a0] border-[#1a1a2e] font-black shadow-md shadow-[#1a1a2e]/10' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400' }}">
+                                {{ $page }}
+                            </a>
+                        @endforeach
+                    </div>
+
+                    @if ($products->hasMorePages())
+                        <a href="{{ $products->appends(['viewMode' => 'grid'])->nextPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-600 hover:border-[#1a1a2e] hover:text-[#1a1a2e] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm">Next</a>
+                    @else
+                        <span class="px-3 py-2 bg-gray-100 text-gray-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Next</span>
+                    @endif
+                </div>
+            </div>
+        @endif
+    </div>
+
+    {{-- MODAL REAL PREVIEW DETAIL --}}
     <div x-show="showDetail" 
          class="fixed inset-0 z-[99] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
          x-cloak x-transition>
@@ -249,7 +317,7 @@
                         </div>
                     </div>
 
-                    {{-- INFO KANAN MODAL --}}
+                    {{-- INFO ATRIBUT PREVIEW KANAN --}}
                     <div class="flex flex-col">
                         <div class="mb-6">
                             <span class="px-3 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-widest rounded-full" x-text="selectedProduct.category?.name"></span>
@@ -303,7 +371,6 @@
                                 Edit Produk Ini
                             </a>
                             
-                            {{-- Button Tong Sampah Modal Terikat Fungsi Global --}}
                             <button type="button" @click="triggerDelete(selectedProduct.id)" class="flex-1 bg-red-50 text-red-500 flex items-center justify-center rounded-2xl border border-red-100 hover:bg-red-100 transition-all py-4">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -317,7 +384,7 @@
     </div>
 </div>
 
-{{-- AREA ISOLASI FORM: Ditaruh di luar seksi mana pun agar 100% aman dari Nested Form --}}
+{{-- AREA ISOLASI FORM FORM DESTRUCTION (Di Luar Scope Guna Mencegah Overlapping Form) --}}
 <div id="isolated-delete-containers" class="hidden" x-cloak>
     @foreach($products as $product)
         <form id="global-delete-form-{{ $product->id }}" action="{{ route('admin.products.destroy', $product->id) }}" method="POST">
@@ -327,9 +394,8 @@
     @endforeach
 </div>
 
-{{-- SCRIPT ENGINE JAVASCRIPT VANILLA & POPUP TOAST LARAVEL --}}
+{{-- SCRIPT MANAGEMENT SAKTI SWEETALERT & TOAST SYSTEM --}}
 <script>
-    // Fungsi pemicu SweetAlert ditaruh di level global window agar bisa dipanggil lancar oleh AlpineJS
     function triggerDelete(productId) {
         Swal.fire({
             title: 'Hapus Produk Kain?',
@@ -354,7 +420,6 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        // Otomatis Render Popup Toast jika Controller Laravel mengirim session success
         @if(session('success'))
             Swal.fire({
                 icon: 'success',

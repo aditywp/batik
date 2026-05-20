@@ -16,62 +16,73 @@ class ReviewSeeder extends Seeder
     {
         $faker = Faker::create('id_ID');
 
-        // Ambil semua pesanan yang statusnya sudah 'delivered' (selesai) beserta item produknya
-        $completedOrders = Order::where('status', 'delivered')->with('items')->get();
+        // Ambil semua pesanan delivered beserta item dan detail produknya
+        $completedOrders = Order::where('status', 'delivered')->with('items.product')->get();
 
         if ($completedOrders->isEmpty()) {
             return;
         }
 
-        // Kumpulan template komentar ulasan batik yang realistis berdasarkan rating
-        $positiveComments = [
-            'Bahan batiknya halus banget, adem pas dipakai. Motifnya juga sangat detail dan premium!',
-            'Kualitas jahitan rapi sekali, pengemasan sangat aman dan cepat sampai. Puas belanja disini.',
-            'Warnanya pas banget di foto, ukurannya sesuai dengan panduan. Recomended seller!',
-            'Produk sangat eksklusif, cocok untuk acara formal maupun kerja sehari-hari. Kainnya tidak luntur pas dicuci.',
-            'Suka banget sama motif parangnya, terlihat gagah dan elegan. Pertahankan kualitasnya!'
-        ];
-
-        $neutralComments = [
-            'Bahan lumayan bagus untuk harga segini, tapi proses pengemasan agak sedikit lama.',
-            'Kain batiknya agak sedikit tipis tapi motifnya bagus banget, secara keseluruhan ok.',
-            'Ukurannya agak ngepas di badan saya, untung motif batiknya cantik jadi ketutup kekurangannya.',
-            'Respon adminnya agak slow respon, tapi produknya aman tidak mengecewakan.'
-        ];
-
-        $negativeComments = [
-            'Ukurannya kekecilan dibanding deskripsi, kainnya agak kaku pas pertama kali dipegang.',
-            'Warna batiknya agak sedikit berbeda dengan yang di foto katalog, pudar sedikit.',
-            'Jahitannya ada beberapa bagian yang kurang rapi, tolong tingkatkan *quality control*-nya ya.'
-        ];
-
         foreach ($completedOrders as $order) {
-            // Kita ulas semua atau beberapa item produk di dalam transaksi sukses ini
             foreach ($order->items as $item) {
                 
-                // Acak rating (70% puas/sangat puas, 20% cukup, 10% kurang puas)
+                // Mengambil nama produk secara dinamis untuk variasi ulasan
+                $productName = $item->product ? $item->product->name : 'produk batik';
+
+                $positivePhrases = [
+                    "Bahan kain {$productName} ini beneran halus dan premium banget.",
+                    "Motifnya rapi sekali, detail canting tulisnya sangat terasa eksklusif.",
+                    "Warna kainnya pas sesuai ekspektasi, pas dipakai langsung kelihatan elegan.",
+                    "Kualitas jahitan juara, potongan pas di badan.",
+                    "Nyaman banget dipakai seharian, kainnya adem dan tidak kaku.",
+                    "Pengiriman cepat sekali, packaging aman terlindungi.",
+                    "Suka banget sama perpaduan warnanya, terlihat berkelas.",
+                    "Sangat puas belanja di sini, bakalan jadi langganan tetap!"
+                ];
+
+                $neutralPhrases = [
+                    "Kualitas kain {$productName} lumayan oke untuk harga segini.",
+                    "Motif batiknya cantik banget, cuma proses pengirimannya aja yang agak lambat.",
+                    "Bahan agak sedikit tipis tapi motif dan warnanya juara, secara keseluruhan memuaskan.",
+                    "Ukuran agak sedikit ngepas di badan, untung modelnya fleksibel.",
+                    "Respon adminnya agak slow respon waktu dichat, tapi produknya aman tidak mengecewakan."
+                ];
+
+                $negativePhrases = [
+                    "Bahan kain {$productName} agak kaku pas pertama datang, jahitannya perlu lebih dirapikan.",
+                    "Warna batiknya sedikit berbeda dengan foto katalognya, agak pudar sedikit.",
+                    "Ukurannya agak kekecilan dibanding deskripsi panduan size chart.",
+                    "Ada bagian benang yang lepas di jahitan samping, tolong QC-nya ditingkatkan lagi ya."
+                ];
+
+                // Penentuan Rating & Komparasi Teks Komentar
                 $roll = rand(1, 100);
                 if ($roll <= 70) {
                     $rating = rand(4, 5);
-                    $comment = $faker->randomElement($positiveComments);
+                    $comment = implode(' ', $faker->randomElements($positivePhrases, rand(1, 2)));
                 } elseif ($roll <= 90) {
                     $rating = 3;
-                    $comment = $faker->randomElement($neutralComments);
+                    $comment = $faker->randomElement($neutralPhrases);
                 } else {
                     $rating = rand(1, 2);
-                    $comment = $faker->randomElement($negativeComments);
+                    $comment = $faker->randomElement($negativePhrases);
                 }
 
-                Review::create([
-                    'user_id'     => $order->user_id,    // Sesuai user yang membeli barang
-                    'product_id'  => $item->product_id,  // Sesuai ID produk yang dibeli
-                    'order_id'    => $order->id,          // Link ke ID order terkait
-                    'rating'      => $rating,             // Integer 1 - 5
-                    'comment'     => $comment,            // Teks komentar ulasan lokal
-                    'is_approved' => $faker->randomElement([1, 1, 1, 0]), // 75% otomatis disetujui (1), 25% butuh persetujuan admin (0)
-                    'created_at'  => $faker->dateTimeBetween($order->created_at, 'now'), // Ulasan dibuat setelah tanggal order paid/delivered
-                    'updated_at'  => now(),
-                ]);
+                // Menggunakan updateOrCreate untuk menghindari error duplicate entry pada unique key
+                Review::updateOrCreate(
+                    [
+                        'user_id'     => $order->user_id,
+                        'product_id'  => $item->product_id,
+                        'order_id'    => $order->id,
+                    ],
+                    [
+                        'rating'      => $rating,
+                        'comment'     => $comment,
+                        'is_approved' => $faker->randomElement([1, 1, 1, 0]), 
+                        'created_at'  => $faker->dateTimeBetween($order->created_at, 'now'), 
+                        'updated_at'  => now(),
+                    ]
+                );
             }
         }
     }

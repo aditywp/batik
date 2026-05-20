@@ -1,34 +1,51 @@
 @extends('layouts.admin')
 
 @section('content')
-{{-- Style khusus untuk transisi halus UI Alpine.js --}}
+{{-- Style khusus untuk kenyamanan UI/UX dashboard premium --}}
 <style>
     [x-cloak] { display: none !important; }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 
-<div class="container mx-auto p-6 font-sans" x-data="{ showFilters: true }">
+<div class="container mx-auto p-6 font-sans" x-data="{ showFilters: true, isExporting: false }">
     {{-- Header Section --}}
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
         <div>
-            <h1 class="text-4xl font-black text-[#1a1a2e] tracking-tighter">Analytics Center</h1>
-            <p class="text-slate-400 text-sm font-medium">Monitoring performa bisnis Batik Ifawati secara real-time.</p>
+            <h1 class="text-4xl font-black text-[#1a1a2e] tracking-tighter uppercase italic">Analytics Center</h1>
+            <p class="text-slate-400 text-sm font-medium">Laporan performa penjualan komprehensif & rekapitulasi finansial toko.</p>
         </div>
         
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 w-full md:w-auto">
             {{-- Tombol Toggle Panel Filter Modern --}}
-            <button @click="showFilters = !showFilters" class="bg-white border border-slate-200 text-slate-700 px-5 py-3 rounded-2xl font-bold hover:bg-slate-50 transition flex items-center gap-2 shadow-sm text-sm">
+            <button @click="showFilters = !showFilters" class="bg-white border border-slate-200 text-slate-700 px-5 py-3 rounded-2xl font-bold hover:bg-slate-50 transition flex items-center gap-2 shadow-sm text-sm whitespace-nowrap">
                 <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
                 </svg>
-                Filter Dropdown
+                Saring Periode
             </button>
             
-            {{-- Tombol Export Excel Premium Interaktif --}}
-            <a href="{{ route('admin.orders.exportExcel', request()->query()) }}" class="bg-[#1a1a2e] text-[#e8c9a0] px-6 py-3 rounded-2xl font-bold hover:opacity-90 transition flex items-center gap-2 shadow-xl shadow-slate-200 text-sm">
-                <svg class="w-4 h-4 text-[#e8c9a0]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                </svg>
-                Export Excel Premium
+            {{-- Tombol Export Excel Premium dengan Loading Feedback --}}
+            <a href="{{ route('admin.orders.exportExcel', request()->query()) }}" 
+               @click="isExporting = true; setTimeout(() => isExporting = false, 4000)"
+               class="bg-[#1a1a2e] text-[#e8c9a0] px-6 py-3 rounded-2xl font-bold hover:opacity-90 transition flex items-center justify-center gap-2 shadow-xl shadow-slate-200 text-sm w-full md:w-auto">
+                <template x-if="!isExporting">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-[#e8c9a0]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        <span>Export Excel Premium</span>
+                    </div>
+                </template>
+                <template x-if="isExporting">
+                    <div class="flex items-center gap-2">
+                        <svg class="animate-spin h-4 w-4 text-[#e8c9a0]" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Menyiapkan Berkas...</span>
+                    </div>
+                </template>
             </a>
         </div>
     </div>
@@ -36,10 +53,8 @@
     {{-- Filter Panel Berbasis Dropdown Multi-Periode Profesional --}}
     <div x-show="showFilters" x-collapse class="mb-8 p-6 bg-white rounded-3xl border border-slate-100 shadow-sm" x-cloak>
         <form action="{{ route('admin.orders.report') }}" method="GET" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {{-- Dropdown Pilihan Tahun (Dinamis dari DB) --}}
             <div>
-                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Pilih Tahun Analisis</label>
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tahun Analisis</label>
                 <select name="year" class="w-full bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-[#e8c9a0] text-sm font-bold py-3 text-slate-700">
                     @foreach($availableYears as $yr)
                         <option value="{{ $yr }}" {{ $selectedYear == $yr ? 'selected' : '' }}>Tahun {{ $yr }}</option>
@@ -47,9 +62,8 @@
                 </select>
             </div>
 
-            {{-- Dropdown Pilihan Bulan (Agregasi Data) --}}
             <div>
-                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Pilih Bulan (Agregasi Data)</label>
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Bulan (Agregasi Data)</label>
                 <select name="month" class="w-full bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-[#e8c9a0] text-sm font-bold py-3 text-slate-700">
                     <option value="">-- Semua Bulan (Rekap Setahun) --</option>
                     @php
@@ -64,7 +78,6 @@
                 </select>
             </div>
 
-            {{-- Tombol Eksekusi Submit Filter --}}
             <div class="flex items-end">
                 <button type="submit" class="w-full bg-[#e8c9a0] text-[#1a1a2e] py-3.5 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#d4b78d] transition shadow-sm">
                     Terapkan Filter
@@ -73,44 +86,125 @@
         </form>
     </div>
 
-    {{-- Stats Grid --}}
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
-        {{-- Card Pendapatan Finansial dengan Kalkulasi Tren Kontribusi Nyata --}}
-        <div class="bg-white p-8 rounded-[2rem] border border-slate-50 shadow-sm relative overflow-hidden group flex flex-col justify-between">
-            <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                <svg class="w-20 h-20 text-[#1a1a2e]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"></path></svg>
-            </div>
+    {{-- KELOMPOK BARU: 3 CARD STATISTIK UTAMA LEBIH LENGKAP --}}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {{-- Card Pendapatan Finansial --}}
+        <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
             <div>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Revenue Projection</p>
-                <h3 class="text-3xl font-black text-[#1a1a2e]">Rp {{ number_format($totalRevenue, 0, ',', '.') }}</h3>
-            </div>
-            <div class="mt-4 flex flex-col gap-1">
-                <div class="flex items-center gap-1.5">
-                    @php
-                        // Menghitung persentase kontribusi omset periode terpilih terhadap total semua omset di DB
-                        $grandTotalAllTime = \App\Models\Order::where('payment_status', 'paid')->sum('total');
-                        $percentageContribution = $grandTotalAllTime > 0 ? ($totalRevenue / $grandTotalAllTime) * 100 : 0;
-                    @endphp
-                    <span class="text-emerald-600 text-xs font-black bg-emerald-50 px-2 py-0.5 rounded-md">
-                        ↑ {{ number_format($percentageContribution, 1) }}%
-                    </span>
-                    <span class="text-slate-400 text-[10px] font-semibold">Kontribusi Omset Terhadap Semua Transaksi</span>
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Gross Revenue</span>
+                    <span class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">{{ $totalTransactions }} Trx</span>
                 </div>
-                <p class="text-[11px] text-slate-500 font-bold mt-2">Volume: <span class="text-[#1a1a2e]">{{ $totalTransactions }} Pesanan Terbayar</span></p>
+                <h3 class="text-2xl font-black text-[#1a1a2e]">Rp {{ number_format($totalRevenue, 0, ',', '.') }}</h3>
+            </div>
+            <div class="mt-4 border-t border-slate-50 pt-3">
+                @php
+                    $grandTotalAllTime = \App\Models\Order::where('payment_status', 'paid')->sum('total');
+                    $percentageContribution = $grandTotalAllTime > 0 ? ($totalRevenue / $grandTotalAllTime) * 100 : 0;
+                @endphp
+                <p class="text-[11px] text-slate-400 font-semibold">
+                    Kontribusi periode ini: <span class="text-emerald-600 font-black">↑ {{ number_format($percentageContribution, 1) }}%</span> dari seumur hidup toko.
+                </p>
             </div>
         </div>
 
-        {{-- Grafik Utama Interaktif (Chart.js) dengan Pendekatan Smart Reflect --}}
-        <div class="md:col-span-2 bg-white p-8 rounded-[2rem] border border-slate-50 shadow-sm">
-            <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 tracking-wider">{{ $chartTitle }}</p>
-            <div class="h-[160px]">
-                <canvas id="salesChart"></canvas>
+        {{-- CARD BARU: Estimasi Profit Bersih (Asumsi Margin Bersih 75% Setelah Biaya Kain) --}}
+        <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Net Profit Estimation</span>
+                    <span class="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">Margin 75%</span>
+                </div>
+                <h3 class="text-2xl font-black text-emerald-600">Rp {{ number_format($totalRevenue * 0.75, 0, ',', '.') }}</h3>
+            </div>
+            <div class="mt-4 border-t border-slate-50 pt-3">
+                <p class="text-[11px] text-slate-400 font-semibold">
+                    Estimasi Harga Pokok Penjualan (HPP): <span class="text-red-500 font-bold">Rp {{ number_format($totalRevenue * 0.25, 0, ',', '.') }}</span>
+                </p>
+            </div>
+        </div>
+
+        {{-- CARD BARU: Kontribusi Berdasarkan Kategori Koleksi Terlaris --}}
+        <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
+            <div>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-3">Top Collection Category</span>
+                <div class="space-y-2">
+                    @php
+                        // Mengambil performa koleksi terlaris langsung dari DB pembungkus item order
+                        $collectionStats = \App\Models\OrderItem::selectRaw('products.collection, COUNT(*) as count')
+                            ->join('products', 'order_items.product_id', '=', 'products.id')
+                            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+                            ->where('orders.payment_status', 'paid')
+                            ->groupBy('products.collection')
+                            ->orderByDesc('count')
+                            ->take(2)
+                            ->get();
+                    @endphp
+                    @forelse($collectionStats as $stat)
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-bold text-slate-700">{{ $stat->collection ?? 'Uncategorized' }}</span>
+                            <span class="font-mono text-slate-400 bg-slate-50 px-2 py-0.5 rounded">{{ $stat->count }} item terjual</span>
+                        </div>
+                    @empty
+                        <p class="text-xs text-slate-400 italic">Belum ada data barang terjual</p>
+                    @endforelse
+                </div>
+            </div>
+            <div class="text-[10px] text-slate-400 font-medium border-t border-slate-50 pt-2 mt-2">
+                Diperbarui secara instan sesuai payment gateway.
             </div>
         </div>
     </div>
 
+    {{-- KELOMPOK TENGAH: GRAFIK & PRODUK TERLARIS --}}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
+        {{-- Grafik Utama Interaktif (Chart.js) --}}
+        <div class="lg:col-span-2 bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-4">{{ $chartTitle }}</p>
+            <div class="h-[210px]">
+                <canvas id="salesChart"></canvas>
+            </div>
+        </div>
+
+        {{-- SEKSI BARU: TABEL MINI TOP SELLING PRODUCTS --}}
+        <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
+            <div>
+                <h3 class="text-xs font-black text-[#1a1a2e] uppercase tracking-wider mb-4">Top 3 Selling Items</h3>
+                <div class="divide-y divide-slate-50">
+                    @php
+                        $topProducts = \App\Models\OrderItem::selectRaw('product_id, SUM(quantity) as total_qty')
+                            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+                            ->where('orders.payment_status', 'paid')
+                            ->groupBy('product_id')
+                            ->orderByDesc('total_qty')
+                            ->take(3)
+                            ->with('product')
+                            ->get();
+                    @endphp
+                    @forelse($topProducts as $tp)
+                    <div class="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                        <div class="w-10 h-10 bg-slate-50 rounded-xl overflow-hidden flex-shrink-0 border border-slate-100">
+                            <img src="{{ asset('storage/' . ($tp->product->variants->first()->image_path ?? 'placeholder.jpg')) }}" class="w-full h-full object-cover">
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <h4 class="text-xs font-black text-[#1a1a2e] truncate">{{ $tp->product->name ?? 'Produk Dihapus' }}</h4>
+                            <p class="text-[10px] text-emerald-600 font-bold">Rp {{ number_format($tp->product->price ?? 0, 0, ',', '.') }}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs font-black text-slate-700 bg-amber-50 text-amber-800 px-2 py-1 rounded-lg">{{ $tp->total_qty }} pcs</span>
+                        </div>
+                    </div>
+                    @empty
+                    <p class="text-xs text-slate-400 italic py-4 text-center">Belum ada komparasi data penjualan produk.</p>
+                    @endforelse
+                </div>
+            </div>
+            <p class="text-[9px] text-slate-400 mt-4 pt-2 border-t border-slate-50">Mengabaikan pesanan batal/belum dibayar.</p>
+        </div>
+    </div>
+
     {{-- Main Table --}}
-    <div class="bg-white rounded-[2rem] shadow-sm border border-slate-50 overflow-hidden">
+    <div class="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
         <div class="p-8 border-b border-slate-50 flex justify-between items-center">
             <h3 class="font-black text-[#1a1a2e] uppercase tracking-widest text-xs">Transaction Logs</h3>
             <span class="text-[10px] bg-slate-100 text-slate-500 px-3 py-1 rounded-full font-bold">Total Baris: {{ $orders->total() }}</span>
@@ -160,10 +254,34 @@
             </table>
         </div>
 
-        {{-- UI Pagination 10 Baris Clean Look --}}
+        {{-- UI Pagination Premium Kustomisasi --}}
         @if($orders->hasPages())
-        <div class="px-8 py-5 border-t border-slate-50 bg-slate-50/30">
-            {{ $orders->links() }}
+        <div class="px-8 py-5 border-t border-slate-50 bg-slate-50/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Menampilkan <span class="text-[#1a1a2e] font-black">{{ $orders->firstItem() }}</span> - <span class="text-[#1a1a2e] font-black">{{ $orders->lastItem() }}</span> dari <span class="text-[#1a1a2e] font-black">{{ $orders->total() }}</span> Log Transaksi
+            </div>
+            <div class="flex items-center gap-1">
+                @if ($orders->onFirstPage())
+                    <span class="px-3 py-2 bg-gray-100 text-gray-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Prev</span>
+                @else
+                    <a href="{{ $orders->appends(request()->query())->previousPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-600 hover:border-[#1a1a2e] hover:text-[#1a1a2e] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm">Prev</a>
+                @endif
+
+                <div class="hidden sm:flex items-center gap-1">
+                    @foreach ($orders->getUrlRange(max(1, $orders->currentPage() - 2), min($orders->lastPage(), $orders->currentPage() + 2)) as $page => $url)
+                        <a href="{{ $url . '&' . http_build_query(request()->except('page')) }}" 
+                           class="w-9 h-9 flex items-center justify-center rounded-xl text-xs font-bold transition-all border {{ $page == $orders->currentPage() ? 'bg-[#1a1a2e] text-[#e8c9a0] border-[#1a1a2e] font-black shadow-md shadow-[#1a1a2e]/10' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400' }}">
+                            {{ $page }}
+                        </a>
+                    @endforeach
+                </div>
+
+                @if ($orders->hasMorePages())
+                    <a href="{{ $orders->appends(request()->query())->nextPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-600 hover:border-[#1a1a2e] hover:text-[#1a1a2e] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm">Next</a>
+                @else
+                    <span class="px-3 py-2 bg-gray-100 text-gray-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Next</span>
+                @endif
+            </div>
         </div>
         @endif
     </div>
@@ -175,13 +293,11 @@
     document.addEventListener('DOMContentLoaded', function() {
         const ctx = document.getElementById('salesChart').getContext('2d');
         
-        // Parsing data dari Laravel Controller aman
         const labels = {!! json_encode($chartLabels ?? []) !!};
         const dataValues = {!! json_encode($chartData ?? []) !!};
         const isMonthlyMode = {!! json_encode($selectedMonth ? true : false) !!};
 
         new Chart(ctx, {
-            // Auto Swap: Jika filter bulan aktif pakai LINE, jika rekap tahunan pakai BAR
             type: isMonthlyMode ? 'line' : 'bar',
             data: {
                 labels: labels,
@@ -201,11 +317,9 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                
-                // PERBAIKAN UI/UX: Tambahkan padding kiri agar teks "Rp" tidak terpotong browser
                 layout: {
                     padding: {
-                        left: 15,  // Memberi ruang aman 15 pixel di sisi kiri sumbu Y
+                        left: 15,
                         right: 10
                     }
                 },
@@ -222,7 +336,6 @@
                         grid: { color: '#f8fafc' },
                         ticks: { 
                             font: { size: 10, family: 'Plus Jakarta Sans' },
-                            // Memastikan ada space/jarak antara teks Rupiah dengan garis sumbu Y
                             padding: 8, 
                             callback: function(value) {
                                 return 'Rp ' + value.toLocaleString('id-ID');

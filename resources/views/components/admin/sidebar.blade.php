@@ -67,7 +67,7 @@
             @endif
         </a>
 
-        {{-- Laporan (MENU BARU) --}}
+        {{-- Laporan --}}
         <a href="{{ route('admin.orders.report') }}"
            class="flex items-center gap-3 px-5 py-2.5 text-sm transition-colors border-l-2
                   {{ request()->routeIs('admin.orders.report')
@@ -77,6 +77,24 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
             </svg>
             Laporan
+        </a>
+
+        {{-- Ulasan Pelanggan (TAMBAHAN SINKRONISASI BADGE MODERASI) --}}
+        <a href="{{ route('admin.reviews.index') }}"
+           class="flex items-center gap-3 px-5 py-2.5 text-sm transition-colors border-l-2
+                  {{ request()->routeIs('admin.reviews.*')
+                      ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-[#e8c9a0]'
+                      : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-transparent' }}">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+            </svg>
+            <span>Ulasan</span>
+            @php $pendingReviews = \App\Models\Review::where('is_approved', 0)->count(); @endphp
+            @if($pendingReviews > 0)
+                <span class="ml-auto text-[10px] bg-orange-500 text-white font-bold px-1.5 py-0.5 rounded-full animate-pulse">
+                    {{ $pendingReviews }}
+                </span>
+            @endif
         </a>
 
     </nav>
