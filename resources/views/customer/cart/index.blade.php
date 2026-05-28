@@ -41,28 +41,41 @@
         @else
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
 
+                {{-- DAFTAR ITEM KERANJANG --}}
                 <div class="lg:col-span-8 space-y-6">
                     @foreach($cartItems as $item)
                         @php
                             $price = $item->variant->price ?? $item->product->price;
                             $subtotalItem = $price * $item->quantity;
+                            // Memastikan path gambar aman ter-fallback
+                            $imagePath = $item->variant->image_path ?? ($item->product->variants->first()->image_path ?? null);
                         @endphp
 
                         <div class="bg-white rounded-[32px] p-8 border border-gray-100 shadow-sm flex gap-8 items-start transition-all hover:shadow-md relative group overflow-hidden">
 
-                            <div class="w-28 h-36 bg-[#0a0a0a] flex-shrink-0 overflow-hidden rounded-2xl border border-gray-50 shadow-inner">
+                            {{-- LINK IMAGES: Klik Foto Untuk Menuju Produk --}}
+                            <a href="{{ route('catalog.show', $item->product->slug) }}" 
+                               class="w-28 h-36 bg-[#0a0a0a] flex-shrink-0 overflow-hidden rounded-2xl border border-gray-50 shadow-inner block relative group/img">
                                 <img
-                                    src="{{ asset('storage/' . ($item->variant->image_path ?? ($item->product->variants->first()->image_path ?? 'placeholder.jpg'))) }}"
-                                    class="w-full h-full object-cover"
+                                    src="{{ $imagePath ? asset('storage/' . $imagePath) : asset('images/placeholder.jpg') }}"
+                                    class="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-110"
+                                    alt="{{ $item->product->name }}"
                                 >
-                            </div>
+                                <div class="absolute inset-0 bg-black/5 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                    <span class="text-white text-[9px] font-black uppercase tracking-widest bg-black/60 px-2 py-1 rounded-md">View</span>
+                                </div>
+                            </a>
 
                             <div class="flex-grow flex flex-col justify-between self-stretch py-1">
                                 <div class="flex justify-between items-start gap-4">
                                     <div>
+                                        {{-- LINK TEXT: Klik Nama Produk Untuk Menuju Halaman Katalog --}}
                                         <h3 class="text-base font-black uppercase tracking-tight text-black mb-2 leading-tight max-w-md">
-                                            {{ $item->product->name }}
+                                            <a href="{{ route('catalog.show', $item->product->slug) }}" class="hover:text-orange-500 hover:underline transition-colors block">
+                                                {{ $item->product->name }}
+                                            </a>
                                         </h3>
+                                        
                                         <div class="flex gap-5 mb-4">
                                             <p class="text-[10px] text-orange-600 font-black uppercase tracking-widest italic">
                                                 Motif: {{ $item->variant->motif ?? 'Standard' }}
@@ -72,6 +85,7 @@
                                             </p>
                                         </div>
 
+                                        {{-- AKSI PENGATUR QUANTITY & REMOVE --}}
                                         <div class="flex items-center gap-6 mt-2">
                                             <div class="flex items-center bg-gray-50 rounded-xl p-1 border border-gray-100 inline-flex">
                                                 <form action="{{ route('customer.cart.update', $item->id) }}" method="POST">
@@ -127,6 +141,7 @@
                     @endforeach
                 </div>
 
+                {{-- RINGKASAN ORDER / CHECKOUT CARD --}}
                 <div class="lg:col-span-4">
                     <div class="bg-white rounded-[40px] p-8 border border-gray-100 shadow-xl sticky top-32">
                         <h2 class="text-[10px] font-black uppercase tracking-[4px] text-orange-500 mb-10 italic">Order Summary</h2>

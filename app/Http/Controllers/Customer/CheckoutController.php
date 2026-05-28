@@ -31,8 +31,6 @@ class CheckoutController extends Controller
                 ->with('error', 'Keranjang belanjamu masih kosong.');
         }
 
-        // PERBAIKAN: Instansiasi data ongkir manual via model ShippingRate telah dihapus karena sudah beralih ke API RajaOngkir
-
         return view('customer.checkout.index', compact('cartItems'));
     }
         
@@ -57,7 +55,7 @@ class CheckoutController extends Controller
         $subtotal = $cartItems->sum(fn($i) => ($i->variant->price ?? $i->product->price) * $i->quantity);
         $total    = $subtotal + $request->shipping_cost;
 
-        // 1. Buat Header Order
+        // 1. Buat Header Order (Awal masuk DB status unpaid & data detail transid masih null)
         $order = Order::create([
             'user_id'          => Auth::id(),
             'order_code'       => 'BI-' . now()->format('Ymd') . '-' . strtoupper(Str::random(5)),
@@ -110,6 +108,7 @@ class CheckoutController extends Controller
 
     /**
      * Halaman Finish Checkout / Nota Pembayaran Berhasil
+     * PERBAIKAN: Menambahkan logic jabat tangan API otomatis untuk mengamankan data null di DB lokal lokal kamu
      */
     public function finish(Request $request)
     {
@@ -121,6 +120,37 @@ class CheckoutController extends Controller
             ->where('order_code', $request->order_id)
             ->where('user_id', Auth::id())
             ->firstOrFail();
+
+        // INTEGRASI SINKRONISASI PULL DATA REKENING METODE BAYAR MIDTRANS
+        try {
+            \Midtrans\Config::$serverKey = config('services.midtrans.server_key');
+            \Midtrans\Config::$isProduction = config('services.midtrans.is_production', false);
+
+            // Ambil status mutasi pembayaran resmi dari core API Midtrans Sandbox
+            $statusJson = \Midtrans\Transaction::status($order->order_code);
+            $transactionStatus = $statusJson->transaction_status;
+
+            if ($transactionStatus == 'settlement' || $transactionStatus == 'capture') {
+                // JIKA LUNAS: Simpan data mutasi agar kolom tidak bernilai null lagi!
+                $order->update([
+                    'payment_status'          => 'paid',
+                    'status'                  => 'processing',
+                    'midtrans_transaction_id' => $statusJson->transaction_id ?? null,
+                    'payment_method'          => $statusJson->payment_type ?? null,
+                    'paid_at'                 => now(),
+                ]);
+            } elseif (in_array($transactionStatus, ['expire', 'cancel', 'deny'])) {
+                // JIKA EXPIRED / CANCEL: Otomatis gagalkan invoice pesanan kain batik
+                $order->update([
+                    'payment_status'          => 'cancelled',
+                    'status'                  => 'cancelled',
+                    'midtrans_transaction_id' => $statusJson->transaction_id ?? null,
+                    'payment_method'          => $statusJson->payment_type ?? null,
+                ]);
+            }
+        } catch (\Exception $e) {
+            // Abaikan jika transaksi belum diproses atau payment modal langsung ditutup paksa
+        }
 
         return view('customer.checkout.finish', compact('order'));
     }

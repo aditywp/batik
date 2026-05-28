@@ -31,7 +31,7 @@
                             <span class="bg-black text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-black/10">
                                 {{ strtoupper($order->status) }}
                             </span>
-                            <span class="text-[9px] font-black uppercase tracking-widest {{ $order->payment_status == 'paid' ? 'text-green-500' : 'text-orange-500' }}">
+                            <span class="text-[9px] font-black uppercase tracking-widest @if($order->payment_status === 'paid') text-green-500 @elseif($order->payment_status === 'cancelled') text-red-500 @else text-orange-500 @endif">
                                 Payment: {{ strtoupper($order->payment_status) }}
                             </span>
                         </div>
@@ -40,13 +40,11 @@
                     <div class="space-y-8">
                         @foreach($order->items as $item)
                             @php
-                                // Logika Image Fallback Akurat sesuai Database Seeder kamu
                                 $imagePath = $item->variant->image_path 
                                              ?? $item->product->variants->first()?->image_path 
                                              ?? $item->product->images->first()?->image_path 
-                                             ?? 'placeholder.jpg';
+                                             ?? null;
                                 
-                                // CEK APAKAH PRODUK INI SUDAH DIREVIEW OLEH USER
                                 $userReview = \App\Models\Review::where('order_id', $order->id)
                                                 ->where('product_id', $item->product_id)
                                                 ->where('user_id', Auth::id())
@@ -54,15 +52,22 @@
                             @endphp
                             <div class="flex flex-col pb-8 border-b border-gray-50 last:border-0 last:pb-0">
                                 <div class="flex gap-6">
-                                    <div class="w-24 h-32 flex-shrink-0 bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-                                        <img src="{{ asset('storage/' . $imagePath) }}" 
-                                             class="w-full h-full object-cover shadow-inner"
-                                             onerror="this.onerror=null; this.src='{{ asset('images/placeholder.jpg') }}';">
-                                    </div>
+                                    <a href="{{ route('catalog.show', $item->product->slug) }}" class="w-24 h-32 flex-shrink-0 bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 shadow-sm block relative group/img">
+                                        <img src="{{ $imagePath ? asset('storage/' . $imagePath) : asset('images/placeholder.jpg') }}" 
+                                             class="w-full h-full object-cover shadow-inner transition-transform duration-500 group-hover/img:scale-105">
+                                        <div class="absolute inset-0 bg-black/5 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                                            <span class="text-white text-[9px] font-black uppercase tracking-widest bg-black/60 px-2 py-1 rounded-md">View</span>
+                                        </div>
+                                    </a>
+
                                     <div class="flex-grow py-2 flex flex-col justify-between">
                                         <div>
-                                            <h4 class="text-base font-black uppercase tracking-tight text-black leading-tight">{{ $item->product->name }}</h4>
-                                            <p class="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-widest">{{ $item->product->category->name ?? 'Batik' }}</p>
+                                            <h4 class="text-base font-black uppercase tracking-tight text-black leading-tight hover:text-orange-600 transition-colors">
+                                                <a href="{{ route('catalog.show', $item->product->slug) }}">
+                                                    {{ $item->product->name }}
+                                                </a>
+                                            </h4>
+                                            <p class="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-widest">{{ $item->product->collection ?? 'Batik Collection' }}</p>
                                             
                                             @if($item->variant)
                                                 <div class="mt-3 flex gap-2">
@@ -79,21 +84,23 @@
                                     </div>
                                 </div>
 
-                                {{-- BAGIAN LOGIKA REVIEW --}}
                                 @if($order->status === 'delivered')
                                     @if($userReview)
-                                        {{-- TAMPILAN JIKA SUDAH REVIEW --}}
-                                        <div class="mt-4 p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <p class="text-[9px] font-black uppercase tracking-widest text-emerald-500 mb-2 italic">✓ Anda telah mengulas produk ini</p>
-                                            <div class="flex gap-1 mb-2">
+                                        <div class="mt-4 p-5 bg-stone-50 rounded-2xl border border-stone-100/60">
+                                            <p class="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-2 italic flex items-center gap-1">
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/>
+                                                </svg>
+                                                Ulasan Terbit Publik
+                                            </p>
+                                            <div class="flex text-amber-400 gap-0.5 mb-2">
                                                 @for($i = 1; $i <= 5; $i++)
-                                                    <span class="text-xs">{{ $i <= $userReview->rating ? '⭐' : '☆' }}</span>
+                                                    <span class="text-xs">{{ $i <= $userReview->rating ? '★' : '☆' }}</span>
                                                 @endfor
                                             </div>
-                                            <p class="text-xs text-slate-800 font-medium italic">"{{ $userReview->comment }}"</p>
+                                            <p class="text-xs text-stone-600 font-medium italic">"{{ $userReview->comment }}"</p>
                                         </div>
                                     @else
-                                        {{-- FORM JIKA BELUM REVIEW --}}
                                         <div class="mt-4 p-5 bg-white rounded-2xl border-2 border-dashed border-slate-200">
                                             <p class="text-[11px] font-black uppercase tracking-widest text-slate-800 mb-3 italic">Share your experience</p>
                                             <form action="{{ route('customer.reviews.store') }}" method="POST">
@@ -182,13 +189,20 @@
                     </div>
 
                     @if($order->payment_status == 'unpaid')
-                        <button id="pay-button" class="relative z-10 w-full bg-black text-white mt-10 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[3px] hover:bg-orange-500 transition-all shadow-xl active:scale-95">
+                        <button id="pay-button" class="relative z-10 w-full bg-black text-white mt-8 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[3px] hover:bg-orange-500 transition-all shadow-xl active:scale-95">
                             Pay Now
                         </button>
-                    @ Pallse
-                        <div class="relative z-10 mt-10 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3">
-                            <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                            <span class="text-[9px] font-black uppercase tracking-widest text-emerald-600">Transaction Completed</span>
+                    @elseif($order->payment_status == 'cancelled')
+                        <div class="mt-8 pt-4 border-t border-gray-50 text-center">
+                            <span class="text-[10px] font-black uppercase tracking-widest text-red-600 bg-red-50 px-4 py-2.5 rounded-xl block border border-red-100">
+                                ✕ Transaction Expired
+                            </span>
+                        </div>
+                    @else
+                        <div class="mt-8 pt-4 border-t border-gray-50 text-center">
+                            <span class="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-4 py-2.5 rounded-xl block border border-emerald-100">
+                                ✓ Transaction Completed
+                            </span>
                         </div>
                     @endif
                 </div>
@@ -202,7 +216,7 @@
     </div>
 </div>
 
-{{-- SCRIPT MIDTRANS SNAP --}}
+{{-- SCRIPT MIDTRANS SNAP INTEGRATION ENGINE --}}
 <script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="{{ config('services.midtrans.client_key') }}"></script>
 <script type="text/javascript">
     const payButton = document.getElementById('pay-button');
@@ -216,10 +230,11 @@
                     window.location.reload();
                 },
                 onError: function(result) {
-                    alert("Payment failed!");
+                    window.location.reload();
                 },
                 onClose: function() {
-                    alert('You closed the popup without finishing the payment');
+                    // Muat ulang halaman untuk memicu pengecekan status otomatis di backend controller
+                    window.location.reload();
                 }
             });
         };

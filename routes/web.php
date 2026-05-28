@@ -111,7 +111,6 @@ Route::middleware('auth')->name('customer.')->group(function () {
     Route::prefix('my-orders')->name('orders.')->group(function () {
         Route::get('/', [CustomerOrderController::class, 'index'])->name('index');
         Route::get('/{order_code}', [CustomerOrderController::class, 'show'])->name('show');
-
         Route::patch('/{order}/complete', [CustomerOrderController::class, 'complete'])->name('complete');
     });
 
