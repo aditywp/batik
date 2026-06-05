@@ -123,7 +123,6 @@
                                 <div class="flex items-center gap-3 self-stretch sm:self-auto justify-between sm:justify-end">
                                     <div class="text-left sm:text-right">
                                         <p class="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Payment Status</p>
-                                        {{-- SINKRONISASI KONDISI WARNA STATUS --}}
                                         <span class="text-[10px] font-black uppercase tracking-wide @if($order->payment_status === 'paid') text-emerald-500 @elseif($order->payment_status === 'cancelled') text-red-500 @else text-orange-500 @endif">
                                             ● {{ $order->payment_status }}
                                         </span>
@@ -184,19 +183,36 @@
                                 </h3>
                             </div>
                             
-                            <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+                                {{-- BUTTON TAMBAHAN: PAY NOW & CANCEL UNTUK STATUS UNPAID / PENDING --}}
+                                @if($order->payment_status === 'unpaid' || $order->payment_status === 'pending')
+                                    <button type="button" onclick="triggerPay('{{ $order->snap_token }}')" 
+                                            class="w-full sm:w-auto px-5 h-10 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-orange-700 transition-all shadow-sm flex items-center justify-center">
+                                        Pay Now
+                                    </button>
+                                    
+                                    <form id="cancel-form-{{ $order->id }}" action="{{ route('customer.orders.cancel', $order->id) }}" method="POST" class="w-full sm:w-auto">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="button" onclick="triggerCancel({{ $order->id }})" 
+                                                class="w-full sm:w-auto px-5 h-10 bg-red-50 border border-red-200 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-red-100 transition-all shadow-sm flex items-center justify-center">
+                                            Cancel
+                                        </button>
+                                    </form>
+                                @endif
+
                                 @if($order->status === 'shipped')
                                     <form id="complete-form-{{ $order->id }}" action="{{ route('customer.orders.complete', $order->id) }}" method="POST" class="w-full sm:w-auto">
                                         @csrf
                                         @method('PATCH')
-                                        <button type="button" onclick="triggerComplete({{ $order->id }})" class="w-full sm:w-auto px-6 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-emerald-700 transition-all shadow-sm">
+                                        <button type="button" onclick="triggerComplete({{ $order->id }})" class="w-full sm:w-auto px-6 h-10 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-emerald-700 transition-all shadow-sm">
                                             Diterima
                                         </button>
                                     </form>
                                 @endif
 
                                 <a href="{{ route('customer.orders.show', $order->order_code) }}" 
-                                   class="w-full sm:w-auto px-6 py-3 bg-white border border-gray-200 text-center rounded-xl text-[10px] font-black uppercase tracking-wider text-stone-600 hover:bg-[#1a1a2e] hover:text-[#e8c9a0] hover:border-[#1a1a2e] transition-all shadow-sm hover:scale-105">
+                                   class="w-full sm:w-auto px-6 h-10 bg-white border border-gray-200 text-center rounded-xl text-[10px] font-black uppercase tracking-wider text-stone-600 hover:bg-[#1a1a2e] hover:text-[#e8c9a0] hover:border-[#1a1a2e] transition-all shadow-sm flex items-center justify-center hover:scale-105">
                                     Detailed Receipt
                                 </a>
                             </div>
@@ -212,14 +228,12 @@
                         Page <span class="text-black font-black">{{ $orders->currentPage() }}</span> of <span class="text-black font-black">{{ $orders->lastPage() }}</span>
                     </div>
                     <div class="flex items-center gap-1">
-                        {{-- Prev Button --}}
                         @if ($orders->onFirstPage())
                             <span class="px-3 py-2 bg-gray-50 text-gray-300 text-[10px] font-black rounded-xl uppercase tracking-wider cursor-not-allowed border border-gray-100">Prev</span>
                         @else
                             <a href="{{ $orders->appends(request()->query())->previousPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-black hover:bg-black hover:text-white text-[10px] font-black rounded-xl uppercase tracking-wider transition-all shadow-sm hover:scale-105">Prev</a>
                         @endif
 
-                        {{-- Halaman Angka --}}
                         <div class="hidden sm:flex items-center gap-1">
                             @foreach ($orders->getUrlRange(max(1, $orders->currentPage() - 2), min($orders->lastPage(), $orders->currentPage() + 2)) as $page => $url)
                                 <a href="{{ $url . '&' . http_build_query(request()->except('page')) }}" 
@@ -229,7 +243,6 @@
                             @endforeach
                         </div>
 
-                        {{-- Next Button --}}
                         @if ($orders->hasMorePages())
                             <a href="{{ $orders->appends(request()->query())->nextPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-black hover:bg-black hover:text-white text-[10px] font-black rounded-xl uppercase tracking-wider transition-all shadow-sm hover:scale-105">Next</a>
                         @else
@@ -244,9 +257,40 @@
     </div>
 </div>
 
-{{-- SCRIPT JAVASCRIPT SWEETALERT2 INTEGRATION ENGINE --}}
+{{-- SCRIPT JAVASCRIPT SWEETALERT2 & MIDTRANS SNAP LISTENER ENGINE --}}
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="{{ config('services.midtrans.client_key') }}"></script>
 <script>
+    function triggerPay(snapToken) {
+        window.snap.pay(snapToken, {
+            onSuccess: function(result) { window.location.reload(); },
+            onPending: function(result) { window.location.reload(); },
+            onError: function(result) { window.location.reload(); },
+            onClose: function() { window.location.reload(); }
+        });
+    }
+
+    function triggerCancel(orderId) {
+        Swal.fire({
+            title: 'Batalkan Transaksi?',
+            text: "Apakah Anda yakin ingin membatalkan pesanan batik ini?",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#f3f4f6',
+            confirmButtonText: '<span style="color: #ffffff; font-weight: 800; text-transform: uppercase; font-size: 11px;">Ya, Batalkan</span>',
+            cancelButtonText: '<span style="color: #4b5563; font-weight: 800; text-transform: uppercase; font-size: 11px;">Batal</span>',
+            customClass: {
+                popup: 'rounded-[24px]',
+                title: 'font-sans font-black text-[#1a1a2e]'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                document.getElementById('cancel-form-' + orderId).submit();
+            }
+        });
+    }
+
     function triggerComplete(orderId) {
         Swal.fire({
             title: 'Pesanan Sudah Diterima?',

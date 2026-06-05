@@ -188,10 +188,21 @@
                         </div>
                     </div>
 
-                    @if($order->payment_status == 'unpaid')
-                        <button id="pay-button" class="relative z-10 w-full bg-black text-white mt-8 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[3px] hover:bg-orange-500 transition-all shadow-xl active:scale-95">
-                            Pay Now
-                        </button>
+                    {{-- MODIFIKASI GERBANG TOMBOL AKSI PEMBAYARAN & PEMBATALAN AKTIF --}}
+                    @if($order->payment_status == 'unpaid' || $order->payment_status == 'pending')
+                        <div class="space-y-3 mt-10 relative z-10">
+                            <button id="pay-button" class="w-full bg-black text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-[3px] hover:bg-orange-500 transition-all shadow-xl active:scale-95">
+                                Pay Now
+                            </button>
+                            
+                            <form id="cancel-form-{{ $order->id }}" action="{{ route('customer.orders.cancel', $order->id) }}" method="POST" class="w-full">
+                                @csrf
+                                @method('PATCH')
+                                <button type="button" onclick="triggerCancel({{ $order->id }})" class="w-full bg-red-50 border border-red-200 text-red-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[3px] hover:bg-red-100 transition-all shadow-sm active:scale-95">
+                                    Cancel Order
+                                </button>
+                            </form>
+                        </div>
                     @elseif($order->payment_status == 'cancelled')
                         <div class="mt-8 pt-4 border-t border-gray-50 text-center">
                             <span class="text-[10px] font-black uppercase tracking-widest text-red-600 bg-red-50 px-4 py-2.5 rounded-xl block border border-red-100">
@@ -216,28 +227,41 @@
     </div>
 </div>
 
-{{-- SCRIPT MIDTRANS SNAP INTEGRATION ENGINE --}}
+{{-- SCRIPT MIDTRANS SNAP & CONFIRMATION SWAL ENGINE --}}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="{{ config('services.midtrans.client_key') }}"></script>
 <script type="text/javascript">
     const payButton = document.getElementById('pay-button');
     if (payButton) {
         payButton.onclick = function () {
             window.snap.pay('{{ $order->snap_token }}', {
-                onSuccess: function(result) {
-                    window.location.reload();
-                },
-                onPending: function(result) {
-                    window.location.reload();
-                },
-                onError: function(result) {
-                    window.location.reload();
-                },
-                onClose: function() {
-                    // Muat ulang halaman untuk memicu pengecekan status otomatis di backend controller
-                    window.location.reload();
-                }
+                onSuccess: function(result) { window.location.reload(); },
+                onPending: function(result) { window.location.reload(); },
+                onError: function(result) { window.location.reload(); },
+                onClose: function() { window.location.reload(); }
             });
         };
+    }
+
+    function triggerCancel(orderId) {
+        Swal.fire({
+            title: 'Batalkan Transaksi?',
+            text: "Apakah Anda yakin ingin membatalkan pesanan batik ini?",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#f3f4f6',
+            confirmButtonText: '<span style="color: #ffffff; font-weight: 800; text-transform: uppercase; font-size: 11px;">Ya, Batalkan</span>',
+            cancelButtonText: '<span style="color: #4b5563; font-weight: 800; text-transform: uppercase; font-size: 11px;">Batal</span>',
+            customClass: {
+                popup: 'rounded-[24px]',
+                title: 'font-sans font-black text-[#1a1a2e]'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                document.getElementById('cancel-form-' + orderId).submit();
+            }
+        });
     }
 </script>
 @endsection

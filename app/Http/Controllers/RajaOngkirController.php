@@ -10,196 +10,124 @@ use Illuminate\Support\Facades\Cache;
 class RajaOngkirController extends Controller
 {
     /**
-     * Header API RajaOngkir (Komerce Bypass)
+     * Header API RajaOngkir (Centralized)
      */
     private function getHeaders()
     {
         return [
             'Accept' => 'application/json',
-            'key'    => config('rajaongkir.api_key'), // Membaca file config/rajaongkir.php
+            'key'    => config('rajaongkir.api_key'),
         ];
     }
 
     /**
-     * Halaman Raja Ongkir / Checkout
+     * Halaman Checkout
      */
     public function index()
     {
-        $provinces = $this->getProvinces();
-
-        return view('customer.checkout.index', compact('provinces'));
+        return view('customer.checkout.index');
     }
 
     /**
-     * AMBIL DATA PROVINSI (Untuk Internal Blade via Server-side)
+     * Mengambil daftar provinsi
      */
     public function getProvinces()
     {
         return Cache::remember('rajaongkir_provinces', 86400, function () {
             $response = Http::withHeaders($this->getHeaders())
                 ->get('https://rajaongkir.komerce.id/api/v1/destination/province');
-
-            if ($response->successful()) {
-                $json = $response->json();
-                return $json['data'] ?? $json;
-            }
-
-            Log::error('RajaOngkir Province Error', [
-                'status' => $response->status(),
-                'body'   => $response->body(),
-            ]);
-
-            return [];
+            return $response->successful() ? ($response->json()['data'] ?? []) : [];
         });
     }
 
-    /**
-     * GET PROVINCES JSON (Untuk Request AJAX Frontend)
-     */
+    // Metode ini wajib ada untuk route 'api.provinces'
     public function getProvincesJson()
     {
-        try {
-            $provinces = $this->getProvinces();
-            return response()->json($provinces);
-        } catch (\Exception $e) {
-            Log::error('RajaOngkir Province JSON Error: ' . $e->getMessage());
-            return response()->json(['error' => 'Gagal memuat data provinsi'], 500);
-        }
+        return response()->json($this->getProvinces());
     }
 
-    /**
-     * GET CITIES BY PROVINCE (CACHE 24 JAM)
-     */
-    public function getCities(int $provinceId)
+    public function getCities($provinceId)
     {
-        try {
-            $cacheKey = 'rajaongkir_cities_' . $provinceId;
+        // Cache hanya menyimpan array, bukan objek response
+        $data = Cache::remember('rajaongkir_cities_' . $provinceId, 86400, function () use ($provinceId) {
+            $response = Http::withHeaders($this->getHeaders())
+                ->get("https://rajaongkir.komerce.id/api/v1/destination/city/{$provinceId}");
+                
+            return $response->successful() ? ($response->json()['data'] ?? []) : [];
+        });
 
-            $cities = Cache::remember($cacheKey, 86400, function () use ($provinceId) {
-                $response = Http::withHeaders($this->getHeaders())
-                    ->get("https://rajaongkir.komerce.id/api/v1/destination/city/{$provinceId}");
-
-                if ($response->successful()) {
-                    $json = $response->json();
-                    return $json['data'] ?? $json;
-                }
-
-                return [];
-            });
-
-            return response()->json($cities);
-
-        } catch (\Exception $e) {
-            Log::error('RajaOngkir City Error: ' . $e->getMessage());
-            return response()->json([
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        // Bungkus data menjadi JSON di luar cache
+         return response()->json($data);
     }
 
-    /**
-     * GET DISTRICTS BY CITY (CACHE 24 JAM)
-     */
-    public function getDistricts(int $cityId)
+    public function getDistricts($cityId)
     {
-        try {
-            $cacheKey = 'rajaongkir_districts_' . $cityId;
+        // Cache hanya menyimpan array
+        $data = Cache::remember('rajaongkir_districts_' . $cityId, 86400, function () use ($cityId) {
+            $response = Http::withHeaders($this->getHeaders())
+                ->get("https://rajaongkir.komerce.id/api/v1/destination/district/{$cityId}");
+            
+            return $response->successful() ? ($response->json()['data'] ?? []) : [];
+        });
 
-            $districts = Cache::remember($cacheKey, 86400, function () use ($cityId) {
-                $response = Http::withHeaders($this->getHeaders())
-                    ->get("https://rajaongkir.komerce.id/api/v1/destination/district/{$cityId}");
-
-                if ($response->successful()) {
-                    $json = $response->json();
-                    return $json['data'] ?? $json;
-                }
-
-                return [];
-            });
-
-            return response()->json($districts);
-
-        } catch (\Exception $e) {
-            Log::error('RajaOngkir District Error: ' . $e->getMessage());
-            return response()->json([
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        // Bungkus data menjadi JSON di luar cache
+        return response()->json($data);
     }
 
     /**
-                 * CALCULATE DOMESTIC COST / AUTOMATIC CHEAPEST SELECTION
-     * (Menyaring kurir termurah langsung di server, menghemat kuota API hit harian)
+     * Menghitung ongkos kirim dengan semua kurir
      */
     public function checkOngkir(Request $request)
     {
         try {
-            $request->validate([
-                'district_id' => 'required',
-                'weight'      => 'required|numeric'
-            ]);
-
             $districtId = $request->district_id;
-            $cacheKey = 'cheapest_ongkir_district_' . $districtId;
+            $weight = $request->weight ?? 1000;
+            $cacheKey = 'ongkir_paling_murah_' . $districtId . '_' . $weight;
 
-            // Simpan hasil kalkulasi termurah di Cache selama 1 jam demi efisiensi kuota
-            $cheapestDelivery = Cache::remember($cacheKey, 3600, function () use ($districtId, $request) {
-                
-                // Memicu pencarian dasar dari sistem kurir (Komerce mengembalikan multi-ekspedisi)
-                $response = Http::asForm()
-                    ->withHeaders($this->getHeaders())
-                    ->post('https://rajaongkir.komerce.id/api/v1/calculate/domestic-cost', [
-                        'origin'      => 2104, // ID asal toko baju batik (Yogyakarta / Depok)
-                        'destination' => $districtId,
-                        'weight'      => $request->weight,
-                        'courier'     => 'jne', // Parameter pemicu pencarian dasar
-                    ]);
+            return Cache::remember($cacheKey, 86400, function () use ($districtId, $weight) {
+                $kurirs = ['jne', 'jnt', 'sicepat'];
+                $semuaLayanan = [];
 
-                if ($response->successful()) {
-                    $allServices = $response->json()['data'] ?? [];
-                    $cheapest = null;
+                foreach ($kurirs as $kodeKurir) {
+                    $response = Http::withHeaders($this->getHeaders())
+                        ->asForm()
+                        ->post('https://rajaongkir.komerce.id/api/v1/calculate/domestic-cost', [
+                            'origin'      => 2581,
+                            'destination' => (int) $districtId,
+                            'weight'      => (float) $weight,
+                            'courier'     => $kodeKurir,
+                        ]);
 
-                    // Mengurai dan menyaring satu per satu objek pengiriman dari API Komerce
-                    foreach ($allServices as $service) {
-                        $cost = intval($service['cost'] ?? 0);
-
-                        // Pastikan harga kurir valid (di atas 0 rupiah)
-                        if ($cost > 0) {
-                            if ($cheapest === null || $cost < $cheapest['cost']) {
-                                $cheapest = [
-                                    'courier'     => strtoupper($service['courier_name'] ?? 'JNE'),
-                                    'service'     => $service['service'] ?? $service['service_name'] ?? 'Reguler',
-                                    'description' => $service['description'] ?? 'Pengiriman Standar',
-                                    'cost'        => $cost,
-                                    'etd'         => $service['etd'] ? $service['etd'] . ' Hari' : ''
+                    if ($response->successful()) {
+                        // API Komerce mengembalikan list layanan dalam 'data'
+                        $data = $response->json()['data'] ?? [];
+                        foreach ($data as $item) {
+                            // Pastikan harga valid
+                            if (isset($item['cost']) && (int)$item['cost'] > 0) {
+                                $semuaLayanan[] = [
+                                    'courier_name' => strtoupper($item['courier_name'] ?? $kodeKurir),
+                                    'service'      => $item['service'] ?? 'REG',
+                                    'cost'         => (int)$item['cost'],
+                                    'etd'          => $item['etd'] ?? '-'
                                 ];
                             }
                         }
                     }
-                    return $cheapest;
                 }
 
-                Log::error('RajaOngkir Multi-Courier Hit Failed', [
-                    'status' => $response->status(),
-                    'body'   => $response->body(),
-                ]);
+                // Jika tidak ada data sama sekali
+                if (empty($semuaLayanan)) return [];
 
-                return null;
+                // URUTKAN: Yang paling murah ditaruh di indeks ke-0
+                usort($semuaLayanan, fn($a, $b) => $a['cost'] <=> $b['cost']);
+
+                // Mengembalikan 1 data termurah saja (hasil perbandingan semua kurir & layanan)
+                return [$semuaLayanan[0]];
             });
 
-            if ($cheapestDelivery) {
-                return response()->json($cheapestDelivery);
-            }
-
-            return response()->json([
-                'message' => 'Gagal mendapatkan atau menyaring data kurir termurah'
-            ], 400);
-
         } catch (\Exception $e) {
-            Log::error('RajaOngkir Error (Cost Calculation Server-Side): ' . $e->getMessage());
-            return response()->json([
-                'error' => 'Terjadi kesalahan sistem penentuan ongkir otomatis'
-            ], 500);
+            Log::error('Ongkir Fatal Error: ' . $e->getMessage());
+            return response()->json(['error' => 'Gagal'], 500);
         }
     }
 }

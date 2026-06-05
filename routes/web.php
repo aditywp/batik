@@ -28,7 +28,6 @@ Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog.index
 Route::get('/catalog/{slug}', [CatalogController::class, 'show'])->name('catalog.show');
 Route::get('/philosophy', fn() => view('philosophy'))->name('philosophy');
 
-// Webhook Midtrans (Jangan masukkan ke middleware Auth)
 Route::post('midtrans/callback', [MidtransWebhookController::class, 'handle']);
 
 /*
@@ -53,7 +52,6 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->n
 Route::prefix('admin')->middleware(['auth', 'is_admin'])->name('admin.')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     
-    // Route untuk mengambil data JSON produk (Real-time Stock Preview)
     Route::get('/products/{product}/json', function (App\Models\Product $product) {
         return response()->json($product->load(['category', 'variants']));
     })->name('products.json');
@@ -62,22 +60,15 @@ Route::prefix('admin')->middleware(['auth', 'is_admin'])->name('admin.')->group(
     Route::resource('categories', CategoryController::class);
     Route::delete('/product-images/{image}', [ProductImageController::class, 'destroy'])->name('product-images.destroy');
     
-    // Manajemen Pesanan & Laporan Admin
     Route::prefix('orders')->name('orders.')->group(function () {
         Route::get('/', [AdminOrderController::class, 'index'])->name('index');
-        
-        // Fitur Laporan & Export
         Route::get('/report', [AdminOrderController::class, 'report'])->name('report');
-        
-        // PERBAIKAN UTAMA: Mengubah nama alias route agar sinkron penuh dengan file index.blade.php
         Route::get('/export/excel', [AdminOrderController::class, 'exportExcel'])->name('exportExcel');
         Route::get('/export/csv', [AdminOrderController::class, 'export'])->name('export'); 
-        
         Route::get('/{order}', [AdminOrderController::class, 'show'])->name('show');
         Route::patch('/{order}/status', [AdminOrderController::class, 'updateStatus'])->name('update-status');
     });
 
-    // PERBAIKAN DI SINI: Nama route dilepas dari prefix 'admin.' ganda agar terbaca bersih 'admin.reviews.index'
     Route::get('/reviews', [App\Http\Controllers\Admin\ReviewController::class, 'index'])->name('reviews.index');
     Route::patch('/reviews/{review}/approve', [App\Http\Controllers\Admin\ReviewController::class, 'approve'])->name('reviews.approve');
     Route::delete('/reviews/{review}', [App\Http\Controllers\Admin\ReviewController::class, 'destroy'])->name('reviews.destroy');
@@ -89,10 +80,8 @@ Route::prefix('admin')->middleware(['auth', 'is_admin'])->name('admin.')->group(
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->name('customer.')->group(function () {
-    
     Route::get('/home', [HomeController::class, 'index'])->name('home');
     
-    // Keranjang
     Route::prefix('cart')->name('cart.')->group(function () { 
         Route::get('/', [CartController::class, 'index'])->name('index');
         Route::post('/add/{product}', [CartController::class, 'add'])->name('add');
@@ -100,34 +89,32 @@ Route::middleware('auth')->name('customer.')->group(function () {
         Route::patch('/update/{cartItem}', [CartController::class, 'update'])->name('update');
     });
 
-    // Checkout
     Route::prefix('checkout')->name('checkout.')->group(function () {
         Route::get('/', [CheckoutController::class, 'index'])->name('index');
         Route::post('/process', [CheckoutController::class, 'process'])->name('process');
         Route::get('/finish', [CheckoutController::class, 'finish'])->name('finish');
     });
 
-    // Pesanan Saya (My Orders)
     Route::prefix('my-orders')->name('orders.')->group(function () {
         Route::get('/', [CustomerOrderController::class, 'index'])->name('index');
         Route::get('/{order_code}', [CustomerOrderController::class, 'show'])->name('show');
+        Route::patch('/{order}/cancel', [CustomerOrderController::class, 'cancel'])->name('cancel');
         Route::patch('/{order}/complete', [CustomerOrderController::class, 'complete'])->name('complete');
     });
 
-    // Fitur Review (Post Review)
     Route::post('/reviews', [CustomerReviewController::class, 'store'])->name('reviews.store');
 });
 
 /*
 |--------------------------------------------------------------------------
-| RajaOngkir API Routing (Komerce Bypass)
+| RajaOngkir API Routing (Sync dengan AJAX di Checkout Page)
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->prefix('api')->group(function () {
-    Route::get('/provinces', [RajaOngkirController::class, 'getProvincesJson'])->name('api.provinces');
-    $ws_route = Route::get('/cities/{province_id}', [RajaOngkirController::class, 'getCities'])->name('api.cities');
-    Route::get('/districts/{city_id}', [RajaOngkirController::class, 'getDistricts'])->name('api.districts');
-    Route::post('/check-cost', [RajaOngkirController::class, 'checkOngkir'])->name('api.check-cost');
+    Route::get('/provinces', [App\Http\Controllers\RajaOngkirController::class, 'getProvincesJson'])->name('api.provinces');
+    Route::get('/cities/{province_id}', [App\Http\Controllers\RajaOngkirController::class, 'getCities'])->name('api.cities');
+    Route::get('/districts/{city_id}', [App\Http\Controllers\RajaOngkirController::class, 'getDistricts'])->name('api.districts');
+    Route::post('/check-cost', [App\Http\Controllers\RajaOngkirController::class, 'checkOngkir'])->name('api.check-cost');
 });
 
 /*

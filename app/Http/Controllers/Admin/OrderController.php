@@ -24,7 +24,7 @@ use PhpOffice\PhpSpreadsheet\Chart\Title;
 class OrderController extends Controller
 {
     /**
-     * Daftar semua pesanan dengan filter & search
+     * Daftar semua pesanan dengan filter & search + Integrasi Otomatisasi Sinkronisasi Midtrans
      */
     public function index(Request $request)
     {
@@ -47,13 +47,50 @@ class OrderController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('order_code', 'like', "%{$search}%")
                   ->orWhereHas('user', fn($u) => $u->where('name', 'like', "%{$search}%")
-                                                    ->orWhere('email', 'like', "%{$search}%"));
+                                                     ->orWhere('email', 'like', "%{$search}%"));
             });
         }
 
+        // Ambil data pesanan terpaginasi (15 baris data)
         $orders = $query->paginate(15)->withQueryString();
 
-        // Hitung ringkasan untuk stat cards
+        // ======================================================================
+        // AUTOMATIC REAL-TIME SYNC FOR ADMIN INDEX (MASS PULL SYSTEM)
+        // Memeriksa dan memperbarui status pesanan secara real-time saat admin membuka dashboard
+        // ======================================================================
+        foreach ($orders as $order) {
+            if ($order->payment_status === 'unpaid' || $order->payment_status === 'pending') {
+                try {
+                    \Midtrans\Config::$serverKey = config('services.midtrans.server_key');
+                    \Midtrans\Config::$isProduction = config('services.midtrans.is_production', false);
+
+                    // Ambil status transaksi resmi langsung dari Core API Midtrans Sandbox
+                    $status = \Midtrans\Transaction::status($order->order_code);
+                    $midtransStatus = $status->transaction_status;
+
+                    if (in_array($midtransStatus, ['expire', 'cancel', 'deny'])) {
+                        $order->update([
+                            'payment_status'          => 'cancelled',
+                            'status'                  => 'cancelled',
+                            'midtrans_transaction_id' => $status->transaction_id ?? null,
+                            'payment_method'          => $status->payment_type ?? null,
+                        ]);
+                    } elseif ($midtransStatus == 'settlement' || $midtransStatus == 'capture') {
+                        $order->update([
+                            'payment_status'          => 'paid',
+                            'status'                  => 'processing',
+                            'midtrans_transaction_id' => $status->transaction_id ?? null,
+                            'payment_method'          => $status->payment_type ?? null,
+                            'paid_at'                 => now(),
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    // Abaikan jika token/invoice belum dibuat sama sekali di server Midtrans
+                }
+            }
+        }
+
+        // Hitung ringkasan untuk stat cards (Mengambil data mutasi pasca-sinkronisasi)
         $summary = [
             'total'      => Order::count(),
             'pending'    => Order::where('status', 'pending')->count(),
@@ -358,11 +395,45 @@ class OrderController extends Controller
     }
 
     /**
-     * Detail satu pesanan
+     * Detail satu pesanan + Otomatisasi Real-time Sinkronisasi Midtrans
      */
     public function show(Order $order)
     {
         $order->load(['user', 'items.product.images', 'items.variant']);
+
+        // ======================================================================
+        // AUTOMATIC REAL-TIME SYNC FOR ADMIN SHOW (PULL SYSTEM)
+        // Memeriksa dan memperbarui status pesanan saat admin membuka lembar detail nota
+        // ======================================================================
+        if ($order->payment_status === 'unpaid' || $order->payment_status === 'pending') {
+            try {
+                \Midtrans\Config::$serverKey = config('services.midtrans.server_key');
+                \Midtrans\Config::$isProduction = config('services.midtrans.is_production', false);
+
+                // Tarik mutasi status resmi langsung dari Core API Midtrans Sandbox
+                $status = \Midtrans\Transaction::status($order->order_code);
+                $midtransStatus = $status->transaction_status;
+
+                if (in_array($midtransStatus, ['expire', 'cancel', 'deny'])) {
+                    $order->update([
+                        'payment_status'          => 'cancelled',
+                        'status'                  => 'cancelled',
+                        'midtrans_transaction_id' => $status->transaction_id ?? null,
+                        'payment_method'          => $status->payment_type ?? null,
+                    ]);
+                } elseif ($midtransStatus == 'settlement' || $midtransStatus == 'capture') {
+                    $order->update([
+                        'payment_status'          => 'paid',
+                        'status'                  => 'processing',
+                        'midtrans_transaction_id' => $status->transaction_id ?? null,
+                        'payment_method'          => $status->payment_type ?? null,
+                        'paid_at'                 => now(),
+                    ]);
+                }
+            } catch (\Exception $e) {
+                // Abaikan jika order belum terdaftar di server sandbox Midtrans
+            }
+        }
 
         return view('admin.orders.show', compact('order'));
     }

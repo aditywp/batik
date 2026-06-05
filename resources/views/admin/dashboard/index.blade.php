@@ -49,7 +49,7 @@
 
     {{-- INTERACTIVE STATS GRID LENGKAP --}}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        {{-- Card Omset --}}
+        {{-- Card Omset (Menggunakan variabel $totalRevenue dinamis hasil kalkulasi pasca-sync) --}}
         <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-5 hover:translate-y-[-4px] transition-all duration-300">
             <div class="bg-emerald-50 text-emerald-600 p-4 rounded-2xl border border-emerald-100">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -59,7 +59,7 @@
             <div>
                 <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Revenue</p>
                 <h2 class="text-xl font-black text-[#1a1a2e] mt-0.5 italic tracking-tight">
-                    Rp {{ number_format(\App\Models\Order::where('payment_status', 'paid')->sum('total'), 0, ',', '.') }}
+                    Rp {{ number_format($totalRevenue, 0, ',', '.') }}
                 </h2>
             </div>
         </div>
@@ -74,7 +74,7 @@
             <div>
                 <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Orders</p>
                 <h2 class="text-2xl font-black text-[#1a1a2e] mt-0.5 italic tracking-tight">
-                    {{ $totalOrders }} <span class="text-xs font-normal text-gray-400 not-italic">Nota</span>
+                    {{ $totalOrders }} <span class="text-xs font-normal text-gray-400 not-italic">Orders</span>
                 </h2>
             </div>
         </div>
@@ -89,7 +89,7 @@
             <div>
                 <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Katalog Produk</p>
                 <h2 class="text-2xl font-black text-[#1a1a2e] mt-0.5 italic tracking-tight">
-                    {{ $totalProducts }} <span class="text-xs font-normal text-gray-400 not-italic">Desain</span>
+                    {{ $totalProducts }} <span class="text-xs font-normal text-gray-400 not-italic">Produk</span>
                 </h2>
             </div>
         </div>
@@ -111,9 +111,6 @@
     </div>
 
     {{-- DATA INTERAKTIF SECTION: AKTIVITAS PESANAN TERBARU --}}
-    @php
-        $latestOrders = \App\Models\Order::with('user')->latest()->take(5)->get();
-    @endphp
     <div class="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden mb-8">
         <div class="p-6 border-b border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-gray-50/20">
             <div>
@@ -125,7 +122,7 @@
             </a>
         </div>
 
-        @if($latestOrders->isEmpty())
+        @if($recentOrders->isEmpty())
             <div class="p-16 text-center">
                 <p class="text-gray-400 italic text-sm">Belum ada aktivitas pendaftaran pesanan baru di dalam sistem database.</p>
             </div>
@@ -142,7 +139,7 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-50 text-sm">
-                        @foreach($latestOrders as $lOrder)
+                        @foreach($recentOrders as $lOrder)
                             <tr class="hover:bg-gray-50/50 transition-colors cursor-pointer" onclick="window.location='{{ route('admin.orders.show', $lOrder->id) }}'">
                                 <td class="p-5 font-black text-[#1a1a2e] font-mono text-xs">
                                     #{{ $lOrder->order_code }}
@@ -222,7 +219,7 @@
             <p class="text-[9px] text-gray-400 mt-4 pt-2 border-t border-gray-50">Kalkulasi omset disaring berdasarkan status gerbang pembayaran Midtrans lunas.</p>
         </div>
 
-        {{-- Widget Logistik Status --}}
+        {{-- Widget Widget Logistik Status --}}
         <div class="bg-white rounded-[32px] p-6 border border-gray-100 shadow-sm flex flex-col justify-between">
             <div>
                 <h3 class="text-xs font-black text-[#1a1a2e] uppercase tracking-wider italic mb-4">Logistik Status</h3>

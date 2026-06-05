@@ -109,7 +109,7 @@
 
                     <div>
                         <label class="block text-sm font-medium mb-2 text-black">
-                            Opsi Pengiriman Ekonomi Termurah
+                            Opsi Pengiriman (Termurah)
                         </label>
                         <div id="cheapest_delivery_info" class="w-full border border-dashed border-gray-300 bg-gray-50 rounded-lg p-4 text-sm text-gray-500 italic">
                             Silakan lengkapi wilayah pengiriman untuk mencari ongkir terbaik...
@@ -136,7 +136,7 @@
 
                 @foreach($cartItems as $item)
                     @php
-                        $itemTotal = $item->product->price * $item->quantity;
+                        $itemTotal = ($item->variant->price ?? $item->product->price) * $item->quantity;
                         $subtotal += $itemTotal;
                     @endphp
 
@@ -202,20 +202,18 @@
 
 <script>
 $(document).ready(function () {
-
-    // Variable global penyimpan data kurir termurah hasil kalkulasi server
     let selectedCourierName = "";
     let selectedCourierService = "";
     let selectedCourierCost = 0;
 
-    // 1. AJAX FETCH ALL PROVINCES ON INITIAL LOAD
     $.get("{{ route('api.provinces') }}", function (data) {
         $.each(data, function (key, value) {
-            $('#shipping_province').append('<option value="' + value.id + '">' + value.name + '</option>');
+            if(value && value.id) {
+                $('#shipping_province').append('<option value="' + value.id + '">' + value.name + '</option>');
+            }
         });
     });
 
-    // 2. CHAINED FILTER: FETCH CITIES ON PROVINCE CHANGE
     $('#shipping_province').change(function () {
         let provinceId = $(this).val();
         $('#shipping_city').empty().append('<option value="">Pilih Kota Tujuan</option>').prop('disabled', true);
@@ -226,13 +224,14 @@ $(document).ready(function () {
             $.get("/api/cities/" + provinceId, function (data) {
                 $('#shipping_city').prop('disabled', false);
                 $.each(data, function (key, value) {
-                    $('#shipping_city').append('<option value="' + value.id + '">' + value.name + '</option>');
+                    if(value && value.id) {
+                        $('#shipping_city').append('<option value="' + value.id + '">' + value.name + '</option>');
+                    }
                 });
             });
         }
     });
 
-    // 3. CHAINED FILTER: FETCH DISTRICTS ON CITY CHANGE
     $('#shipping_city').change(function () {
         let cityId = $(this).val();
         $('#shipping_district').empty().append('<option value="">Pilih Kecamatan Tujuan</option>').prop('disabled', true);
@@ -242,18 +241,17 @@ $(document).ready(function () {
             $.get("/api/districts/" + cityId, function (data) {
                 $('#shipping_district').prop('disabled', false);
                 $.each(data, function (key, value) {
-                    $('#shipping_district').append('<option value="' + value.id + '" data-postal="' + value.postal_code + '">' + value.name + '</option>');
+                    if(value && value.id) {
+                        $('#shipping_district').append('<option value="' + value.id + '" data-postal="' + (value.postal_code || '') + '">' + value.name + '</option>');
+                    }
                 });
             });
         }
     });
 
-    // 4. AUTOSET POSTAL CODE & TRIGGER AMBIL TARIF TERMURAH (TEPAT 1 KALI HIT)
     $('#shipping_district').change(function () {
         let postalCode = $(this).find(':selected').data('postal');
-        if (postalCode) {
-            $('#postal_code').val(postalCode);
-        }
+        if (postalCode) $('#postal_code').val(postalCode);
         
         let districtId = $(this).val();
         if (districtId) {
@@ -263,37 +261,43 @@ $(document).ready(function () {
         }
     });
 
-    // Fungsi tunggal menerima hasil kalkulasi terbersih dari Server-Side Controller
     function fetchCheapestShipping(districtId) {
-        $('#cheapest_delivery_info').removeClass('text-green-600 font-semibold').addClass('text-gray-500 italic').html('⏳ Memeriksa opsi kurir terbaik & termurah...');
+        $('#cheapest_delivery_info').html('⏳ Mencari opsi pengiriman termurah...');
         
-        $.post("{{ route('api.check-cost') }}", {
-            _token: "{{ csrf_token() }}",
-            district_id: districtId,
-            weight: 1000
-        }, function (cheapest) {
-            if (cheapest && cheapest.cost) {
-                // Set data bersih langsung dari respon server ke global variabel sistem checkout
-                selectedCourierName = cheapest.courier;
-                selectedCourierService = cheapest.service;
-                selectedCourierCost = cheapest.cost;
+        $.ajax({
+            url: "{{ route('api.check-cost') }}",
+            type: "POST",
+            data: { _token: "{{ csrf_token() }}", district_id: districtId, weight: 1000 },
+            success: function (data) {
+                if (data && data.length > 0) {
+                    let s = data[0]; 
+                    let namaKurir = s.courier_name || s.name || 'Kurir';
+                    let service = s.service || 'REG';
+                    let cost = parseInt(s.cost) || 0;
 
-                // Render detail info teks kurir otomatis di UI
-                let etdString = cheapest.etd ? ' (' + cheapest.etd + ')' : '';
-                $('#cheapest_delivery_info')
-                    .removeClass('text-gray-500 italic')
-                    .addClass('text-green-700 font-medium bg-green-50 border-green-300')
-                    .html('✅ Terpilih Otomatis: <strong>' + selectedCourierName + ' - ' + selectedCourierService + '</strong>' + etdString + ' — <strong>Rp ' + selectedCourierCost.toLocaleString('id-ID') + '</strong>');
+                    selectedCourierName = namaKurir;
+                    selectedCourierService = service;
+                    selectedCourierCost = cost;
 
-                // Update Ringkasan Total Tagihan di Sebelah Kanan
-                let subtotal = parseInt($('#grand-total').data('subtotal'));
-                $('#shipping-cost').text('Rp ' + selectedCourierCost.toLocaleString('id-ID'));
-                $('#grand-total').text('Rp ' + (subtotal + selectedCourierCost).toLocaleString('id-ID'));
-            } else {
-                $('#cheapest_delivery_info').html('❌ Layanan pengiriman tidak tersedia untuk rute wilayah ini.');
+                    $('#cheapest_delivery_info').html(`
+                        <div class="p-4 bg-green-50 border border-green-300 rounded-lg text-green-700">
+                            ✅ <strong>${namaKurir} - ${service}</strong><br>
+                            Biaya: <strong>Rp ${cost.toLocaleString('id-ID')}</strong>
+                        </div>
+                    `);
+
+                    let subtotal = parseInt($('#grand-total').data('subtotal'));
+                    $('#shipping-cost').text('Rp ' + cost.toLocaleString('id-ID'));
+                    $('#grand-total').text('Rp ' + (subtotal + cost).toLocaleString('id-ID'));
+                } else {
+                    $('#cheapest_delivery_info').html('❌ Tidak ada kurir yang melayani rute ini.');
+                    resetShippingCost();
+                }
+            },
+            error: function(xhr) {
+                $('#cheapest_delivery_info').html('❌ Gagal memuat ongkir.');
+                resetShippingCost();
             }
-        }).fail(function() {
-            $('#cheapest_delivery_info').html('❌ Terjadi kendala saat menghubungkan data pengiriman.');
         });
     }
 
@@ -301,12 +305,11 @@ $(document).ready(function () {
         selectedCourierName = "";
         selectedCourierService = "";
         selectedCourierCost = 0;
-        $('#cheapest_delivery_info').removeClass('bg-green-50 border-green-300').addClass('bg-gray-50 border-gray-300 text-gray-500 italic').html('Silakan lengkapi wilayah pengiriman untuk mencari ongkir terbaik...');
+        $('#cheapest_delivery_info').html('Silakan lengkapi wilayah pengiriman untuk mencari ongkir terbaik...');
         $('#shipping-cost').text('Rp 0');
         $('#grand-total').text('Rp ' + parseInt($('#grand-total').data('subtotal')).toLocaleString('id-ID'));
     }
 
-    // 5. SECURE AJAX FORM CHECKOUT AND MIDTRANS CALL SNAP OPENER
     $('#checkout-button').click(function () {
         let province = $('#shipping_province option:selected').text();
         let city = $('#shipping_city option:selected').text();
@@ -316,7 +319,7 @@ $(document).ready(function () {
         let phone = $('#phone').val();
 
         if (!district || !detailAddress || !phone || selectedCourierCost === 0) {
-            alert('Harap isi nomor telepon, lengkapi alamat, dan tunggu hingga sistem otomatis mendeteksi tarif kurir termurah!');
+            alert('Harap isi nomor telepon, lengkapi alamat, dan pastikan kurir telah termuat!');
             return;
         }
 
@@ -342,13 +345,13 @@ $(document).ready(function () {
                             window.location.href = "/checkout/finish?order_id=" + response.order_code;
                         },
                         onError: function(result) {
-                            alert('Proses Pembayaran Gagal, Silakan Cek Riwayat Menu Transaksi.');
+                            alert('Proses Pembayaran Gagal.');
                         }
                     });
                 }
             },
             error: function (xhr) {
-                alert('Sistem Gagal Memproses Checkout: ' + xhr.responseText);
+                alert('Sistem Gagal Memproses Checkout.');
             }
         });
     });

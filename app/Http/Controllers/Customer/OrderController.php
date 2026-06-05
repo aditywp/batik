@@ -29,6 +29,51 @@ class OrderController extends Controller
         // 4. Eksekusi Pagination (5 data per halaman) dan pertahankan query string URL
         $orders = $query->paginate(5)->withQueryString();
 
+        // ======================================================================
+        // AUTOMATIC REAL-TIME SYNC FOR INDEX PAGE (MASS PULL SYSTEM)
+        // Memeriksa dan memperbarui status pesanan yang masih 'unpaid' secara massal
+        // ======================================================================
+        foreach ($orders as $order) {
+            if ($order->payment_status === 'unpaid' || $order->payment_status === 'pending') {
+                try {
+                    \Midtrans\Config::$serverKey = config('services.midtrans.server_key');
+                    \Midtrans\Config::$isProduction = config('services.midtrans.is_production', false);
+
+                    $status = \Midtrans\Transaction::status($order->order_code);
+                    $midtransStatus = $status->transaction_status;
+
+                    if (in_array($midtransStatus, ['expire', 'cancel', 'deny'])) {
+                        // KUNCI LOGISTIK: Kembalikan stok jika status berubah ke cancelled untuk pertama kali
+                        if ($order->status !== 'cancelled') {
+                            foreach ($order->items as $item) {
+                                if ($item->variant_id) {
+                                    \App\Models\ProductVariant::where('id', $item->variant_id)->increment('stock', $item->quantity);
+                                }
+                                \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                            }
+                        }
+
+                        $order->update([
+                            'payment_status'          => 'cancelled',
+                            'status'                  => 'cancelled',
+                            'midtrans_transaction_id' => $status->transaction_id ?? null,
+                            'payment_method'          => $status->payment_type ?? null,
+                        ]);
+                    } elseif ($midtransStatus == 'settlement' || $midtransStatus == 'capture') {
+                        $order->update([
+                            'payment_status'          => 'paid',
+                            'status'                  => 'processing',
+                            'midtrans_transaction_id' => $status->transaction_id ?? null,
+                            'payment_method'          => $status->payment_type ?? null,
+                            'paid_at'                 => now(),
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    // Abaikan jika order belum terbentuk di server sandbox Midtrans
+                }
+            }
+        }
+
         return view('customer.orders.index', compact('orders'));
     }
 
@@ -50,6 +95,16 @@ class OrderController extends Controller
                 $midtransStatus = $status->transaction_status;
 
                 if (in_array($midtransStatus, ['expire', 'cancel', 'deny'])) {
+                    // KUNCI LOGISTIK: Kembalikan stok jika status berubah ke cancelled untuk pertama kali
+                    if ($order->status !== 'cancelled') {
+                        foreach ($order->items as $item) {
+                            if ($item->variant_id) {
+                                \App\Models\ProductVariant::where('id', $item->variant_id)->increment('stock', $item->quantity);
+                            }
+                            \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                        }
+                    }
+
                     $order->update([
                         'payment_status'          => 'cancelled',
                         'status'                  => 'cancelled',
@@ -93,25 +148,75 @@ class OrderController extends Controller
     }
 
     /**
+     * FITUR PEMBATALAN TRANSAKSI MANUAL OLEH CUSTOMER
+     * Menghubungkan tombol pembatalan langsung dengan server API Midtrans + Mengembalikan Stok Produk.
+     */
+    public function cancel(\App\Models\Order $order)
+    {
+        // Validasi kepemilikan data pesanan
+        if ($order->user_id !== auth()->id()) {
+            abort(403, 'Tindakan ilegal.');
+        }
+
+        // Pembatalan hanya berlaku jika status pembayaran masih belum lunas / pending
+        if (in_array($order->payment_status, ['unpaid', 'pending'])) {
+            try {
+                \Midtrans\Config::$serverKey = config('services.midtrans.server_key');
+                \Midtrans\Config::$isProduction = config('services.midtrans.is_production', false);
+                
+                // Kirim instruksi pembatalan resmi ke server API Midtrans agar token Snap hangus
+                \Midtrans\Transaction::cancel($order->order_code);
+            } catch (\Exception $e) {
+                // Tetap abaikan jika transaksi belum tergenerate sempurna di server Midtrans
+            }
+
+            // KUNCI LOGISTIK: Kembalikan persediaan produk ke database inventory karena batal dibeli
+            if ($order->status !== 'cancelled') {
+                foreach ($order->items as $item) {
+                    if ($item->variant_id) {
+                        \App\Models\ProductVariant::where('id', $item->variant_id)->increment('stock', $item->quantity);
+                    }
+                    \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                }
+            }
+
+            // Perbarui data lokal menjadi cancelled
+            $order->update([
+                'payment_status' => 'cancelled',
+                'status'         => 'cancelled'
+            ]);
+
+            return redirect()->back()->with('success', 'Pesanan Anda telah berhasil dibatalkan.');
+        }
+
+        return redirect()->back()->with('error', 'Pesanan tidak dapat dibatalkan.');
+    }
+
+    /**
      * FITUR REAL-TIME SINKRONISASI MIDTRANS GATEWAY (PULL SYSTEM)
-     * Mengatasi kendala localhost (127.0.0.1) yang tidak bisa ditembak oleh webhook Midtrans luar.
      */
     public function syncMidtransStatus($id)
     {
-        // Set konfigurasi rahasia Core API Server Sandbox Midtrans kamu
         \Midtrans\Config::$serverKey = config('services.midtrans.server_key');
         \Midtrans\Config::$isProduction = config('services.midtrans.is_production', false);
         
-        // Cari nota transaksi target
         $order = \App\Models\Order::findOrFail($id);
 
         try {
-            // Tembak server API Midtrans secara langsung untuk verifikasi status invoice asli
             $status = \Midtrans\Transaction::status($order->order_code);
             $midtransStatus = $status->transaction_status;
 
-            // Logika pencocokan status: Menyimpan data mutasi agar kolom internal DB tidak null lagi
             if (in_array($midtransStatus, ['expire', 'cancel', 'deny'])) {
+                // KUNCI LOGISTIK: Kembalikan stok jika status berubah ke cancelled untuk pertama kali
+                if ($order->status !== 'cancelled') {
+                    foreach ($order->items as $item) {
+                        if ($item->variant_id) {
+                            \App\Models\ProductVariant::where('id', $item->variant_id)->increment('stock', $item->quantity);
+                        }
+                        \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                    }
+                }
+
                 $order->update([
                     'payment_status'          => 'cancelled',
                     'status'                  => 'cancelled',
@@ -131,7 +236,6 @@ class OrderController extends Controller
             // Tangani jika invoice belum sempat dibuat atau token belum terekam di server Midtrans
         }
 
-        //Kembalikan customer ke halaman detail tanda terima yang sudah ter-update otomatis
         return redirect()->route('customer.orders.show', $order->order_code);
     }
 }
