@@ -1,12 +1,17 @@
 @extends('layouts.admin')
 
 @section('content')
-<div class="container mx-auto p-6">
+<div class="container mx-auto p-6" x-data="{ 
+    motifs: [{ 
+        name: '', 
+        sizes: [{ size: '', price: '', stock: '' }] 
+    }] 
+}">
     <div class="max-w-5xl mx-auto bg-white rounded-[40px] shadow-xl overflow-hidden border border-gray-100">
         {{-- Header Form --}}
         <div class="bg-[#1a1a2e] p-8">
             <h2 class="text-[#e8c9a0] font-bold text-2xl tracking-tight">Tambah Produk Batik Baru</h2>
-            <p class="text-gray-400 text-xs mt-1">Lengkapi informasi dasar dan variasi stok produk Anda.</p>
+            <p class="text-gray-400 text-xs mt-1">Lengkapi informasi dasar dan variasi stok produk Anda. Tanda (<span class="text-red-500 font-bold">*</span>) wajib diisi.</p>
         </div>
         
         {{-- Form Start --}}
@@ -19,17 +24,17 @@
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
-                        <label class="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Nama Produk</label>
-                        <input type="text" name="name" value="{{ old('name') }}" 
+                        <label class="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Nama Produk <span class="text-red-500">*</span></label>
+                        <input type="text" name="name" value="{{ old('name') }}" maxlength="100"
                                class="w-full bg-gray-50 border-gray-200 rounded-2xl py-3.5 px-5 focus:border-[#e8c9a0] focus:ring-[#e8c9a0] transition-all" 
                                required placeholder="Contoh: Kemeja Batik Solo">
                         @error('name') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                     </div>
 
                     <div>
-                        <label class="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Kategori Utama</label>
+                        <label class="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Kategori Utama <span class="text-red-500">*</span></label>
                         <select name="category_id" class="w-full bg-gray-50 border-gray-200 rounded-2xl py-3.5 px-5 focus:border-[#e8c9a0] focus:ring-[#e8c9a0] transition-all" required>
-                            <option value="">-- Pilih Kategori --</option>
+                            <option value="" disabled selected>-- Pilih Kategori --</option>
                             @foreach($categories as $category)
                                 <option value="{{ $category->id }}" {{ old('category_id') == $category->id ? 'selected' : '' }}>{{ $category->name }}</option>
                             @endforeach
@@ -41,9 +46,9 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {{-- INPUT COLLECTIONS --}}
                     <div>
-                        <label class="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Target Koleksi (Collections)</label>
+                        <label class="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Target Koleksi <span class="text-red-500">*</span></label>
                         <select name="collection" class="w-full bg-gray-50 border-gray-200 rounded-2xl py-3.5 px-5 focus:border-[#e8c9a0] focus:ring-[#e8c9a0] transition-all" required>
-                            <option value="">-- Pilih Koleksi --</option>
+                            <option value="" disabled selected>-- Pilih Koleksi --</option>
                             <option value="Women" {{ old('collection') == 'Women' ? 'selected' : '' }}>Women</option>
                             <option value="Men" {{ old('collection') == 'Men' ? 'selected' : '' }}>Men</option>
                             <option value="Craft" {{ old('collection') == 'Craft' ? 'selected' : '' }}>Craft</option>
@@ -53,18 +58,42 @@
                         @error('collection') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                     </div>
 
+                    {{-- HARGA UTAMA DENGAN PERINGATAN DINAMIS --}}
                     <div>
-                        <label class="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Harga Utama (Rp)</label>
-                        <input type="number" name="price" value="{{ old('price') }}" 
-                               class="w-full bg-gray-50 border-gray-200 rounded-2xl py-3.5 px-5 focus:border-[#e8c9a0] focus:ring-[#e8c9a0] transition-all" 
-                               required placeholder="Harga dasar produk">
+                        <label class="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Harga Utama <span class="text-red-500">*</span></label>
+                        <div class="relative" x-data="{
+                            rawPrice: '{{ old('price', '') }}',
+                            formatInput(e) {
+                                let val = e.target.value.replace(/\D/g, ''); 
+                                if(val.length > 8) val = val.substring(0, 8); 
+                                this.rawPrice = val;
+                                e.target.value = val ? new Intl.NumberFormat('id-ID').format(val) : '';
+                            }
+                        }">
+                            <span class="absolute left-5 top-3.5 text-gray-500 font-bold">Rp</span>
+                            
+                            {{-- Input teks visual --}}
+                            <input type="text" minlength="6"
+                                   :value="rawPrice ? new Intl.NumberFormat('id-ID').format(rawPrice) : ''"
+                                   @input="formatInput"
+                                   class="w-full bg-gray-50 border-gray-200 rounded-2xl py-3.5 pl-12 pr-5 focus:border-[#e8c9a0] focus:ring-[#e8c9a0] transition-all" 
+                                   required placeholder="Minimal 10.000">
+                            
+                            {{-- Input tersembunyi untuk backend --}}
+                            <input type="hidden" name="price" :value="rawPrice">
+                            
+                            {{-- Teks Peringatan Dinamis jika di bawah 10.000 --}}
+                            <p x-cloak x-show="rawPrice !== '' && parseInt(rawPrice) < 10000" class="text-red-500 text-[10px] mt-1.5 ml-1 font-bold italic">
+                                ⚠️ Harga tidak valid (Minimal Rp 10.000)
+                            </p>
+                        </div>
                         @error('price') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Deskripsi</label>
-                    <textarea name="description" rows="4" 
+                    <label class="block text-xs font-bold text-gray-700 uppercase mb-2 ml-1">Deskripsi <span class="text-red-500">*</span></label>
+                    <textarea name="description" rows="4" maxlength="1000"
                               class="w-full bg-gray-50 border-gray-200 rounded-2xl py-3.5 px-5 focus:border-[#e8c9a0] focus:ring-[#e8c9a0] transition-all" 
                               required placeholder="Tuliskan detail bahan, kenyamanan, dan motif batik...">{{ old('description') }}</textarea>
                     @error('description') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
@@ -74,15 +103,10 @@
             <hr class="border-gray-100">
 
             {{-- 2. BAGIAN VARIASI BERLEVEL (MOTIF > UKURAN) --}}
-            <div x-data="{ 
-                motifs: [{ 
-                    name: '', 
-                    sizes: [{ size: '', price: '', stock: 0 }] 
-                }] 
-            }">
+            <div>
                 <div class="flex justify-between items-center mb-8">
                     <h3 class="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">02. Variasi Produk (Stok per Ukuran/Motif)</h3>
-                    <button type="button" @click="motifs.push({ name: '', sizes: [{ size: '', price: '', stock: 0 }] })"
+                    <button type="button" @click="motifs.push({ name: '', sizes: [{ size: '', price: '', stock: '' }] })"
                             class="bg-[#1a1a2e] text-white px-5 py-2.5 rounded-2xl text-xs font-bold hover:bg-black transition-all shadow-lg shadow-gray-200">
                         + Tambah Motif Baru
                     </button>
@@ -99,14 +123,14 @@
 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                                 <div>
-                                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nama Motif</label>
-                                    <input type="text" :name="`motifs[${mIndex}][name]`" x-model="motif.name" 
+                                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nama Motif <span class="text-red-500">*</span></label>
+                                    <input type="text" :name="`motifs[${mIndex}][name]`" x-model="motif.name" maxlength="100" required
                                            class="mt-2 block w-full bg-white border-gray-200 rounded-2xl py-3 px-5 text-sm shadow-sm focus:border-[#e8c9a0] focus:ring-[#e8c9a0]" 
                                            placeholder="Contoh: Parang Rusak Biru">
                                 </div>
                                 <div>
-                                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Foto Motif</label>
-                                    <input type="file" :name="`motifs[${mIndex}][image]`" 
+                                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Foto Motif <span class="text-red-500">*</span></label>
+                                    <input type="file" :name="`motifs[${mIndex}][image]`" required
                                            class="mt-2 block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-6 file:rounded-full file:border-0 file:bg-[#1a1a2e] file:text-white file:font-bold border border-gray-200 rounded-2xl bg-white p-1.5">
                                 </div>
                             </div>
@@ -115,7 +139,7 @@
                             <div class="bg-white p-6 rounded-[30px] border border-gray-100 shadow-inner">
                                 <div class="flex justify-between items-center mb-6">
                                     <p class="text-xs font-bold text-gray-500 italic ml-2">Daftar Ukuran untuk motif ini:</p>
-                                    <button type="button" @click="motif.sizes.push({ size: '', price: '', stock: 0 })"
+                                    <button type="button" @click="motif.sizes.push({ size: '', price: '', stock: '' })"
                                             class="text-[10px] bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold hover:bg-blue-100 transition-colors">
                                         + Tambah Ukuran
                                     </button>
@@ -124,25 +148,50 @@
                                 <div class="space-y-4">
                                     <template x-for="(sItem, sIndex) in motif.sizes" :key="sIndex">
                                         <div class="grid grid-cols-4 gap-4 items-end bg-gray-50/50 p-4 rounded-2xl border border-dashed border-gray-200">
+                                            
+                                            {{-- SIZE --}}
                                             <div>
-                                                <label class="text-[9px] font-black text-gray-400 uppercase tracking-tighter mb-1 block ml-1">Size</label>
-                                                <select :name="`motifs[${mIndex}][sizes][${sIndex}][size]`" x-model="sItem.size" 
+                                                <label class="text-[9px] font-black text-gray-400 uppercase tracking-tighter mb-1 block ml-1">Size <span class="text-red-500">*</span></label>
+                                                <select :name="`motifs[${mIndex}][sizes][${sIndex}][size]`" x-model="sItem.size" required
                                                         class="w-full rounded-xl border-gray-200 bg-white text-xs focus:ring-[#e8c9a0]">
-                                                    <option value="">N/A</option>
-                                                    <option value="S">S</option><option value="M">M</option><option value="L">L</option>
-                                                    <option value="XL">XL</option><option value="XXL">XXL</option>
+                                                    <option value="" disabled selected>-- Pilih Size --</option>
+                                                    <option value="S">S</option>
+                                                    <option value="M">M</option>
+                                                    <option value="L">L</option>
+                                                    <option value="XL">XL</option>
+                                                    <option value="XXL">XXL</option>
                                                 </select>
                                             </div>
+                                            
+                                            {{-- HARGA KHUSUS --}}
                                             <div>
-                                                <label class="text-[9px] font-black text-gray-400 uppercase tracking-tighter mb-1 block ml-1">Harga Khusus</label>
-                                                <input type="number" :name="`motifs[${mIndex}][sizes][${sIndex}][price]`" x-model="sItem.price" 
-                                                       class="w-full rounded-xl border-gray-200 bg-white text-xs focus:ring-[#e8c9a0]" placeholder="Opsional">
+                                                <label class="text-[9px] font-black text-gray-400 uppercase tracking-tighter mb-1 block ml-1">Harga Khusus (Opsional)</label>
+                                                <div class="relative">
+                                                    <span class="absolute left-3 top-2.5 text-gray-400 font-bold text-xs">Rp</span>
+                                                    
+                                                    <input type="text" minlength="6"
+                                                           :value="sItem.price ? new Intl.NumberFormat('id-ID').format(sItem.price) : ''"
+                                                           @input="let val = $event.target.value.replace(/\D/g, ''); if(val.length > 8) val = val.substring(0,8); sItem.price = val; $event.target.value = val ? new Intl.NumberFormat('id-ID').format(val) : ''"
+                                                           class="w-full rounded-xl border-gray-200 bg-white text-xs focus:ring-[#e8c9a0] pl-8" 
+                                                           placeholder="Min 10.000">
+                                                    
+                                                    <input type="hidden" :name="`motifs[${mIndex}][sizes][${sIndex}][price]`" :value="sItem.price">
+                                                </div>
+                                                {{-- Peringatan Dinamis --}}
+                                                <p x-cloak x-show="sItem.price !== '' && parseInt(sItem.price) < 10000" class="text-red-500 text-[9px] mt-1 ml-1 font-bold italic">
+                                                    ⚠️ Min. Rp 10.000
+                                                </p>
                                             </div>
+
+                                            {{-- STOK --}}
                                             <div>
-                                                <label class="text-[9px] font-black text-gray-400 uppercase tracking-tighter mb-1 block ml-1">Stok</label>
-                                                <input type="number" :name="`motifs[${mIndex}][sizes][${sIndex}][stock]`" x-model="sItem.stock" 
-                                                       class="w-full rounded-xl border-gray-200 bg-white text-xs focus:ring-[#e8c9a0]" required>
+                                                <label class="text-[9px] font-black text-gray-400 uppercase tracking-tighter mb-1 block ml-1">Stok <span class="text-red-500">*</span></label>
+                                                {{-- Batas Stok Maksimal 3 Digit --}}
+                                                <input type="text" :name="`motifs[${mIndex}][sizes][${sIndex}][stock]`" x-model="sItem.stock" required maxlength="3"
+                                                       @input="$event.target.value = $event.target.value.replace(/\D/g, ''); sItem.stock = $event.target.value"
+                                                       class="w-full rounded-xl border-gray-200 bg-white text-xs focus:ring-[#e8c9a0]" placeholder="Max 999">
                                             </div>
+                                            
                                             <div class="flex justify-center">
                                                 <button type="button" @click="motif.sizes.splice(sIndex, 1)" x-show="motif.sizes.length > 1" 
                                                         class="text-red-400 p-2 hover:text-red-600 transition-colors">

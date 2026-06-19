@@ -47,6 +47,18 @@
             Produk
         </a>
 
+        {{-- Voucher & Poin --}}
+        <a href="{{ route('admin.vouchers.index') }}"
+           class="flex items-center gap-3 px-5 py-2.5 text-sm transition-colors
+                  {{ request()->routeIs('admin.vouchers.*')
+                      ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-l-2 border-[#e8c9a0]'
+                      : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-l-2 border-transparent' }}">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path>
+            </svg>
+            Voucher & Poin
+        </a>
+
         <p class="px-5 text-[10px] text-white/25 uppercase tracking-widest mb-2 mt-6">Transaksi</p>
 
         {{-- Pesanan --}}
@@ -79,7 +91,7 @@
             Laporan
         </a>
 
-        {{-- Ulasan Pelanggan (TAMBAHAN SINKRONISASI BADGE MODERASI) --}}
+        {{-- Ulasan Pelanggan --}}
         <a href="{{ route('admin.reviews.index') }}"
            class="flex items-center gap-3 px-5 py-2.5 text-sm transition-colors border-l-2
                   {{ request()->routeIs('admin.reviews.*')

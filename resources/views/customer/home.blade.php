@@ -1,23 +1,23 @@
 @extends('layouts.customer')
 
 @section('content')
+<div class="overflow-x-hidden w-full">
     {{-- HERO SECTION --}}
     <section class="min-h-screen flex flex-col lg:flex-row items-center pt-20">
-        <div class="w-full lg:w-1/2 relative flex justify-center items-center p-10 fade-in">
+        <div class="w-full lg:w-1/2 relative flex justify-center items-center p-6 md:p-10 fade-in">
             <div class="absolute z-0 opacity-20">
-                <img src="https://www.transparentpng.com/download/flower/pink-flower-png-transparent-12.png" class="w-[500px] rotate-12 blur-sm" alt="decor">
+                <img src="https://www.transparentpng.com/download/flower/pink-flower-png-transparent-12.png" class="w-[300px] md:w-[500px] rotate-12 blur-sm" alt="decor">
             </div>
             
             <div class="relative z-10">
                 @if(isset($products) && $products->count() > 0)
                     @php $heroProduct = $products->first(); @endphp
-                    {{-- PERBAIKAN 1: Menambahkan link navigasi langsung ke detail produk pada Highlight --}}
                     <a href="{{ route('catalog.show', $heroProduct->slug) }}" class="block relative group cursor-pointer">
                         <img src="{{ asset('storage/' . ($heroProduct->variants->first()->image_path ?? 'placeholder.jpg')) }}" 
-                             class="w-[320px] h-[450px] object-cover rounded-sm shadow-2xl border border-white/10 group-hover:scale-[1.02] transition duration-500" 
+                             class="w-[280px] md:w-[320px] h-[400px] md:h-[450px] object-cover rounded-sm shadow-2xl border border-white/10 group-hover:scale-[1.02] transition duration-500" 
                              style="mask-image: linear-gradient(to bottom, black 85%, transparent 100%);">
                         
-                        <div class="absolute bottom-10 -right-6 lg:-right-10 bg-black/60 backdrop-blur-lg border border-white/10 p-5 text-left group-hover:bg-black/80 transition duration-500">
+                        <div class="absolute bottom-10 -right-4 lg:-right-10 bg-black/60 backdrop-blur-lg border border-white/10 p-5 text-left group-hover:bg-black/80 transition duration-500">
                             <p class="text-[9px] uppercase tracking-[0.3em] text-amber-500 mb-1">Highlight</p>
                             <h4 class="text-sm font-semibold tracking-wider text-white">{{ $heroProduct->name }}</h4>
                             <p class="text-[10px] text-gray-400 mt-1 uppercase">{{ $heroProduct->category->name }}</p>
@@ -27,17 +27,17 @@
             </div>
         </div>
 
-        <div class="w-full lg:w-1/2 flex flex-col justify-center px-10 lg:px-20 text-center lg:text-left fade-in" style="animation-delay: 0.3s">      
-            <h1 class="text-5xl lg:text-6xl font-playfair italic mb-8 leading-tight text-white">
+        <div class="w-full lg:w-1/2 flex flex-col justify-center px-6 md:px-10 lg:px-20 text-center lg:text-left fade-in" style="animation-delay: 0.3s">      
+            <h1 class="text-4xl md:text-5xl lg:text-6xl font-playfair italic mb-8 leading-tight text-white">
                 Start to be <br> 
                 <span class="not-italic">Remembered</span>
             </h1>
             
             <div class="flex flex-wrap justify-center lg:justify-start gap-4">
-                <a href="{{ route('catalog.index') }}" class="text-[10px] uppercase tracking-[0.2em] bg-white text-black px-10 py-5 hover:bg-amber-500 transition duration-500 font-bold">
+                <a href="{{ route('catalog.index') }}" class="text-[10px] uppercase tracking-[0.2em] bg-white text-black px-8 py-4 md:px-10 md:py-5 hover:bg-amber-500 transition duration-500 font-bold">
                     Shop Collections
                 </a>
-                <a href="#featured" class="text-[10px] uppercase tracking-[0.2em] border border-white/30 px-10 py-5 hover:border-white transition duration-500">
+                <a href="#featured" class="text-[10px] uppercase tracking-[0.2em] border border-white/30 px-8 py-4 md:px-10 md:py-5 hover:border-white transition duration-500">
                     Featured Art
                 </a>
             </div>
@@ -45,27 +45,26 @@
     </section>
 
     {{-- FEATURED COLLECTIONS SECTION --}}
-    <section id="featured" class="py-32 bg-hmns-dark">
-        <div class="max-w-7xl mx-auto px-10">
-            <div class="flex justify-between items-end mb-16">
+    <section id="featured" class="py-20 md:py-32 bg-black">
+        <div class="max-w-7xl mx-auto px-6 md:px-10">
+            <div class="flex flex-col md:flex-row md:justify-between md:items-end mb-12 md:mb-16 gap-6">
                 <div>
                     <p class="text-[10px] uppercase tracking-[0.4em] text-amber-500 mb-2">Curated Selection</p>
-                    <h2 class="text-3xl font-playfair text-white">Featured Collections</h2>
+                    <h2 class="text-2xl md:text-3xl font-playfair text-white">Featured Collections</h2>
                 </div>
-                <a href="{{ route('catalog.index') }}" class="text-[10px] uppercase tracking-[0.2em] border-b border-white/20 pb-1 hover:border-white transition">View All</a>
+                <a href="{{ route('catalog.index') }}" class="text-[10px] uppercase tracking-[0.2em] border-b border-white/20 pb-1 hover:border-white transition w-max">View All</a>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 md:gap-12">
                 @if(isset($products) && $products->count() > 0)
                     @foreach($products->take(3) as $product)
                     <div class="group cursor-pointer">
                         <div class="relative overflow-hidden aspect-[3/4] bg-black">
-                            {{-- PERBAIKAN 2: Menghapus class 'grayscale' agar foto produk berwarna asli sejak awal --}}
                             <img src="{{ asset('storage/' . ($product->variants->first()->image_path ?? 'placeholder.jpg')) }}" 
                                  class="w-full h-full object-cover transition duration-1000 group-hover:scale-105 border border-white/5">
                             
                             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                                <div class="flex flex-col gap-3 w-full px-10">
+                                <div class="flex flex-col gap-3 w-full px-6 md:px-10">
                                     <a href="{{ route('catalog.show', $product->slug) }}" class="text-center text-[10px] uppercase tracking-widest border border-white py-3 hover:bg-white hover:text-black transition font-bold text-white">
                                         Details
                                     </a>
@@ -102,10 +101,10 @@
     </section>
 
     {{-- PHILOSOPHY SECTION --}}
-    <section class="py-32 bg-black border-t border-white/5">
-        <div class="max-w-7xl mx-auto px-10 flex flex-col lg:flex-row items-center gap-20">
+    <section class="py-20 md:py-32 bg-black border-t border-white/5">
+        <div class="max-w-7xl mx-auto px-6 md:px-10 flex flex-col lg:flex-row items-center gap-12 md:gap-20">
             <div class="lg:w-1/2">
-                <h2 class="text-3xl font-playfair italic mb-8 leading-snug text-white">
+                <h2 class="text-2xl md:text-3xl font-playfair italic mb-8 leading-snug text-white">
                     "Batik is an art fused with soul. <br>
                     In Ifawati, we believe that each pattern 
                     is there to make you adored, loved and remembered."
@@ -114,15 +113,15 @@
                     See our stories
                 </a>
             </div>
-            <div class="lg:w-1/2 grid grid-cols-2 gap-6 text-white">
-                {{-- PERBAIKAN 3: Menghapus class 'grayscale' pada dua gambar galeri cerita di bawah ini --}}
+            <div class="lg:w-1/2 grid grid-cols-2 gap-4 md:gap-6 text-white w-full">
                 <div class="overflow-hidden">
-                    <img src="https://images.unsplash.com/photo-1615484477778-ca3b77940c25?auto=format&fit=crop&q=80" class="w-full h-80 object-cover transition duration-700 hover:scale-110">
+                    <img src="https://images.unsplash.com/photo-1615484477778-ca3b77940c25?auto=format&fit=crop&q=80" class="w-full h-64 md:h-80 object-cover transition duration-700 hover:scale-110">
                 </div>
-                <div class="overflow-hidden mt-12">
-                    <img src="https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&q=80" class="w-full h-80 object-cover transition duration-700 hover:scale-110">
+                <div class="overflow-hidden mt-8 md:mt-12">
+                    <img src="https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&q=80" class="w-full h-64 md:h-80 object-cover transition duration-700 hover:scale-110">
                 </div>
             </div>
         </div>
     </section>
+</div>
 @endsection

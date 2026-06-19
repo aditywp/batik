@@ -93,6 +93,26 @@ class MidtransService
         }
 
         /**
+         * TAMBAH POTONGAN VOUCHER (JIKA ADA)
+         * Menghitung selisih antara harga asli (subtotal + ongkir) dengan total yang dibayar
+         */
+        $discount = ($order->subtotal + $order->shipping_cost) - $order->total;
+
+        if ($discount > 0) {
+            
+            $params['item_details'][] = [
+
+                'id' => 'VOUCHER',
+
+                'price' => (int) -$discount, // Harus minus agar Midtrans mengurangi total tagihannya
+
+                'quantity' => 1,
+
+                'name' => 'Potongan Voucher',
+            ];
+        }
+
+        /**
          * GET SNAP TOKEN
          */
         return Snap::getSnapToken($params);

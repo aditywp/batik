@@ -46,7 +46,6 @@ class ProductController extends Controller
             }
         }
 
-        // KUNCI PERBAIKAN: Tarik data kategori agar variabel $categories terdefinisi dan tidak memicu crash di Blade!
         $categories = Category::all();
 
         // 6. Eksekusi Pagination (12 produk agar rapi di tampilan Grid kelipatan 4 kolom)
@@ -69,19 +68,26 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
+        // KUNCI PERBAIKAN: Validasi Back-End diperketat
         $request->validate([
-            'name'           => 'required|string|max:255',
-            'description'    => 'required|string',
-            'price'          => 'required|numeric|min:0',
-            'category_id'    => 'required|exists:categories,id',
-            'collection'     => 'required|string|in:Women,Men,Kids,Craft,Family',
-            'motifs'         => 'required|array|min:1',
-            'motifs.*.name'  => 'required|string',
-            'motifs.*.image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'motifs.*.sizes' => 'required|array|min:1',
-            'motifs.*.sizes.*.size'  => 'nullable|string',
-            'motifs.*.sizes.*.stock' => 'required|integer|min:0',
+            'name'                   => 'required|string|max:100', // Maks 100 Karakter
+            'description'            => 'required|string|max:255', // Maks 255 Karakter
+            'price'                  => 'required|numeric|min:10000', // Minimal Rp 10.000
+            'category_id'            => 'required|exists:categories,id',
+            'collection'             => 'required|string|in:Women,Men,Kids,Craft,Family',
+            'motifs'                 => 'required|array|min:1',
+            'motifs.*.name'          => 'required|string|max:100', // Nama motif maks 100
+            'motifs.*.image'         => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'motifs.*.sizes'         => 'required|array|min:1',
+            'motifs.*.sizes.*.size'  => 'required|string', // Wajib diisi 
+            'motifs.*.sizes.*.price' => 'nullable|numeric|min:10000', // Harga khusus minimal Rp 10.000
+            'motifs.*.sizes.*.stock' => 'required|integer|min:0|max:1000', // Stok 0 s/d 1000
             'images.*'               => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ], [
+            // Kustomisasi pesan error agar mudah dipahami admin
+            'price.min' => 'Harga utama minimal adalah Rp 10.000.',
+            'motifs.*.sizes.*.price.min' => 'Harga khusus variasi minimal adalah Rp 10.000.',
+            'name.max' => 'Nama produk tidak boleh lebih dari 100 karakter.',
         ]);
 
         try {
@@ -159,15 +165,22 @@ class ProductController extends Controller
      */
     public function update(Request $request, Product $product)
     {
+        // KUNCI PERBAIKAN: Validasi Edit juga harus sama ketatnya dengan validasi Store
         $request->validate([
-            'name'         => 'required|string|max:255',
-            'description'  => 'required|string',
-            'price'        => 'required|numeric|min:0',
-            'category_id'  => 'required|exists:categories,id',
-            'collection'   => 'required|string|in:Women,Men,Kids,Craft,Family',
-            'motifs'       => 'required|array|min:1',
-            'motifs.*.name'  => 'required|string',
-            'motifs.*.sizes' => 'required|array|min:1',
+            'name'                   => 'required|string|max:100', 
+            'description'            => 'required|string|max:1000',
+            'price'                  => 'required|numeric|min:10000', 
+            'category_id'            => 'required|exists:categories,id',
+            'collection'             => 'required|string|in:Women,Men,Kids,Craft,Family',
+            'motifs'                 => 'required|array|min:1',
+            'motifs.*.name'          => 'required|string|max:100',
+            'motifs.*.sizes'         => 'required|array|min:1',
+            'motifs.*.sizes.*.size'  => 'required|string',
+            'motifs.*.sizes.*.price' => 'nullable|numeric|min:10000',
+            'motifs.*.sizes.*.stock' => 'required|integer|min:0|max:9999',
+        ], [
+            'price.min' => 'Harga utama minimal adalah Rp 10.000.',
+            'motifs.*.sizes.*.price.min' => 'Harga khusus variasi minimal adalah Rp 10.000.',
         ]);
 
         try {

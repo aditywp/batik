@@ -41,9 +41,9 @@
                         @foreach($order->items as $item)
                             @php
                                 $imagePath = $item->variant->image_path 
-                                             ?? $item->product->variants->first()?->image_path 
-                                             ?? $item->product->images->first()?->image_path 
-                                             ?? null;
+                                           ?? $item->product->variants->first()?->image_path 
+                                           ?? $item->product->images->first()?->image_path 
+                                           ?? null;
                                 
                                 $userReview = \App\Models\Review::where('order_id', $order->id)
                                                 ->where('product_id', $item->product_id)
@@ -70,7 +70,7 @@
                                             <p class="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-widest">{{ $item->product->collection ?? 'Batik Collection' }}</p>
                                             
                                             @if($item->variant)
-                                                <div class="mt-3 flex gap-2">
+                                                <div class="mt-3">
                                                     <span class="px-2 py-1 bg-gray-100 rounded text-[9px] font-black uppercase text-gray-500 tracking-tighter">
                                                         Motif: {{ $item->variant->motif ?? 'Original' }} / Size: {{ $item->variant->size ?? 'N/A' }}
                                                     </span>
@@ -88,9 +88,7 @@
                                     @if($userReview)
                                         <div class="mt-4 p-5 bg-stone-50 rounded-2xl border border-stone-100/60">
                                             <p class="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-2 italic flex items-center gap-1">
-                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/>
-                                                </svg>
+                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/></svg>
                                                 Ulasan Terbit Publik
                                             </p>
                                             <div class="flex text-amber-400 gap-0.5 mb-2">
@@ -182,6 +180,22 @@
                             <span class="text-black">Rp {{ number_format($order->shipping_cost, 0, ',', '.') }}</span>
                         </div>
                         
+                        {{-- VOUCHER DISPLAY --}}
+                        @if($order->user_voucher_id)
+                            @php
+                                $voucher = \Illuminate\Support\Facades\DB::table('user_vouchers')
+                                    ->join('vouchers', 'user_vouchers.voucher_id', '=', 'vouchers.id')
+                                    ->where('user_vouchers.id', $order->user_voucher_id)
+                                    ->first();
+                            @endphp
+                            @if($voucher)
+                                <div class="flex justify-between items-center bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                                    <span class="text-emerald-700 italic text-[10px]">Voucher ({{ $voucher->name }})</span>
+                                    <span class="text-emerald-700 italic text-[10px]">- Rp {{ number_format($voucher->discount_amount, 0, ',', '.') }}</span>
+                                </div>
+                            @endif
+                        @endif
+
                         <div class="pt-6 border-t border-gray-100 flex flex-col items-end">
                             <span class="text-[9px] font-black uppercase tracking-[4px] text-orange-500 mb-2">Total Transaction</span>
                             <span class="text-3xl font-black italic tracking-tighter text-black">Rp {{ number_format($order->total, 0, ',', '.') }}</span>
@@ -216,11 +230,6 @@
                             </span>
                         </div>
                     @endif
-                </div>
-
-                <div class="mt-6 px-4 py-6 border-2 border-dashed border-gray-100 rounded-3xl text-center">
-                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-300 mb-2">Need Help?</p>
-                    <a href="#" class="text-xs font-bold text-gray-500 hover:text-black transition-colors border-b border-gray-200">Contact Customer Support</a>
                 </div>
             </div>
         </div>

@@ -1,13 +1,13 @@
 <?php
-// app/Models/User.php
 
 namespace App\Models;
 
+use Illuminate\Contracts\Auth\MustVerifyEmail; // 1. Tambahkan ini
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-
-class User extends Authenticatable
+// 2. Tambahkan 'implements MustVerifyEmail' di class
+class User extends Authenticatable implements MustVerifyEmail
 {
     use Notifiable;
 
@@ -34,12 +34,33 @@ class User extends Authenticatable
         return $this->role === 'admin';
     }
 
-    // Relasi (sudah didefinisikan di fase sebelumnya)
+    // Relasi
     public function orders()    { return $this->hasMany(Order::class); }
     public function reviews()   { return $this->hasMany(Review::class); }
-    // app/Models/User.php — pastikan ini ada
+    
     public function cartItems()
     {
         return $this->hasMany(\App\Models\CartItem::class);
+    }
+
+    public function vouchers()
+    {
+        return $this->belongsToMany(Voucher::class, 'user_vouchers')
+                    ->withPivot('id', 'is_used', 'used_at')
+                    ->withTimestamps();
+    }
+
+    // Logika Otomatis saat user baru dibuat
+    protected static function booted()
+    {
+        static::created(function ($user) {
+            $welcomeVoucher = \App\Models\Voucher::where('is_welcome_voucher', true)
+                                ->where('is_active', true)
+                                ->first();
+
+            if ($welcomeVoucher) {
+                $user->vouchers()->attach($welcomeVoucher->id);
+            }
+        });
     }
 }

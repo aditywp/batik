@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
@@ -50,6 +51,14 @@ class OrderController extends Controller
                                     \App\Models\ProductVariant::where('id', $item->variant_id)->increment('stock', $item->quantity);
                                 }
                                 \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                            }
+
+                            // KEMBALIKAN VOUCHER KE DOMPET
+                            if ($order->user_voucher_id) {
+                                DB::table('user_vouchers')->where('id', $order->user_voucher_id)->update([
+                                    'is_used' => false,
+                                    'used_at' => null
+                                ]);
                             }
                         }
 
@@ -103,6 +112,14 @@ class OrderController extends Controller
                             }
                             \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
                         }
+
+                        // KEMBALIKAN VOUCHER KE DOMPET
+                        if ($order->user_voucher_id) {
+                            DB::table('user_vouchers')->where('id', $order->user_voucher_id)->update([
+                                'is_used' => false,
+                                'used_at' => null
+                            ]);
+                        }
                     }
 
                     $order->update([
@@ -141,7 +158,17 @@ class OrderController extends Controller
                 'status' => 'delivered'
             ]);
 
-            return redirect()->back()->with('success', 'Terima kasih! Pesanan Anda telah selesai.');
+            // ==========================================
+            // LOGIKA PENAMBAHAN POIN
+            // Rumus: Total belanja / 10.000. (Contoh belanja 50.000 = 5 Poin)
+            // ==========================================
+            $earnedPoints = floor($order->total / 10000);
+
+            if ($earnedPoints > 0) {
+                $order->user->increment('points', $earnedPoints);
+            }
+
+            return redirect()->back()->with('success', "Terima kasih! Pesanan Anda telah selesai. Anda mendapatkan tambahan {$earnedPoints} Poin!");
         }
 
         return redirect()->back()->with('error', 'Status pesanan tidak valid.');
@@ -178,6 +205,14 @@ class OrderController extends Controller
                     }
                     \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
                 }
+
+                // KEMBALIKAN VOUCHER KE DOMPET
+                if ($order->user_voucher_id) {
+                    DB::table('user_vouchers')->where('id', $order->user_voucher_id)->update([
+                        'is_used' => false,
+                        'used_at' => null
+                    ]);
+                }
             }
 
             // Perbarui data lokal menjadi cancelled
@@ -186,7 +221,7 @@ class OrderController extends Controller
                 'status'         => 'cancelled'
             ]);
 
-            return redirect()->back()->with('success', 'Pesanan Anda telah berhasil dibatalkan.');
+            return redirect()->back()->with('success', 'Pesanan Anda telah berhasil dibatalkan dan Voucher telah dikembalikan ke dompet.');
         }
 
         return redirect()->back()->with('error', 'Pesanan tidak dapat dibatalkan.');
@@ -214,6 +249,14 @@ class OrderController extends Controller
                             \App\Models\ProductVariant::where('id', $item->variant_id)->increment('stock', $item->quantity);
                         }
                         \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                    }
+
+                    // KEMBALIKAN VOUCHER KE DOMPET
+                    if ($order->user_voucher_id) {
+                        DB::table('user_vouchers')->where('id', $order->user_voucher_id)->update([
+                            'is_used' => false,
+                            'used_at' => null
+                        ]);
                     }
                 }
 

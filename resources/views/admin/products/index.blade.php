@@ -13,7 +13,26 @@
     selectedProduct: {},
     activeImage: '',
     selectedMotif: null,
-    selectedSize: null
+    selectedSize: null,
+    
+    // FUNGSI DINAMIS UNTUK HARGA
+    get displayPrice() {
+        let p = this.selectedProduct.price || 0;
+        if (this.selectedSize) {
+            let v = this.selectedProduct.variants?.find(x => x.id === this.selectedSize);
+            if (v && v.price) p = v.price; // Gunakan harga khusus jika ada
+        }
+        return parseInt(p).toLocaleString('id-ID');
+    },
+    
+    // FUNGSI DINAMIS UNTUK LABEL HARGA
+    get priceLabel() {
+        if (this.selectedSize) {
+            let v = this.selectedProduct.variants?.find(x => x.id === this.selectedSize);
+            if (v && v.price) return 'Harga Khusus Ukuran Ini';
+        }
+        return 'Harga Dasar';
+    }
 }">
     {{-- HEADER MANAGEMENT DAFTAR PRODUK --}}
     <div class="flex justify-between items-center mb-8">
@@ -325,8 +344,9 @@
                         </div>
 
                         <div class="bg-gray-50 p-6 rounded-3xl mb-8 border border-gray-100">
-                            <p class="text-xs text-gray-400 mb-1 font-bold uppercase tracking-widest">Harga Dasar</p>
-                            <h3 class="text-3xl font-black text-red-600" x-text="'Rp ' + (selectedProduct.price ? parseInt(selectedProduct.price).toLocaleString('id-ID') : 0)"></h3>
+                            {{-- LABEL DAN HARGA KINI BERSIFAT DINAMIS --}}
+                            <p class="text-xs text-gray-400 mb-1 font-bold uppercase tracking-widest" x-text="priceLabel"></p>
+                            <h3 class="text-3xl font-black text-red-600" x-text="'Rp ' + displayPrice"></h3>
                         </div>
 
                         <div class="space-y-8">

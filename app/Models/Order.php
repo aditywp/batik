@@ -13,7 +13,7 @@ class Order extends Model
         'total', 'status', 'shipping_address', 'courier',
         'courier_service', 'shipping_weight', 'payment_method',
         'payment_status', 'paid_at',
-        'tracking_number', // WAJIB ADA DI SINI
+        'tracking_number', 'user_voucher_id',
     ];
 
     protected $casts = [

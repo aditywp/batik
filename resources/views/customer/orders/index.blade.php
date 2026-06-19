@@ -173,18 +173,43 @@
                                 </div>
                             @endforeach
                         </div>
-
                         {{-- TOTALAN CARD & AKSI UTAMA INVOICE --}}
                         <div class="p-6 md:p-8 bg-stone-50/30 border-t border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
                                 <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 italic">Total Order Value</p>
-                                <h3 class="text-2xl font-black text-[#1a1a2e] italic tracking-tight">
-                                    Rp {{ number_format($order->total, 0, ',', '.') }}
-                                </h3>
+                                
+                                {{-- LOGIKA TAMPILAN VOUCHER --}}
+                                <div class="mb-2">
+                                    <h3 class="text-2xl font-black text-[#1a1a2e] italic tracking-tight">
+                                        Rp {{ number_format($order->total, 0, ',', '.') }}
+                                    </h3>
+                                    
+                                    {{-- Jika ada voucher, tampilkan informasinya --}}
+                                    @if($order->user_voucher_id)
+                                        @php
+                                            // Ambil data voucher melalui relasi jika ada, 
+                                            // atau kita bisa query langsung karena kita simpan user_voucher_id
+                                            $voucher = \Illuminate\Support\Facades\DB::table('user_vouchers')
+                                                ->join('vouchers', 'user_vouchers.voucher_id', '=', 'vouchers.id')
+                                                ->where('user_vouchers.id', $order->user_voucher_id)
+                                                ->first();
+                                        @endphp
+                                        @if($voucher)
+                                            <div class="flex items-center gap-2 mt-1">
+                                                <span class="bg-emerald-100 text-emerald-700 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                    Voucher Terpakai: {{ $voucher->name }}
+                                                </span>
+                                                <span class="text-[10px] text-emerald-600 font-bold">
+                                                    (- Rp {{ number_format($voucher->discount_amount, 0, ',', '.') }})
+                                                </span>
+                                            </div>
+                                        @endif
+                                    @endif
+                                </div>
                             </div>
                             
                             <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
-                                {{-- BUTTON TAMBAHAN: PAY NOW & CANCEL UNTUK STATUS UNPAID / PENDING --}}
+                                {{-- Button Pay Now, Cancel, dll tetap sama... --}}
                                 @if($order->payment_status === 'unpaid' || $order->payment_status === 'pending')
                                     <button type="button" onclick="triggerPay('{{ $order->snap_token }}')" 
                                             class="w-full sm:w-auto px-5 h-10 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-orange-700 transition-all shadow-sm flex items-center justify-center">
@@ -212,12 +237,11 @@
                                 @endif
 
                                 <a href="{{ route('customer.orders.show', $order->order_code) }}" 
-                                   class="w-full sm:w-auto px-6 h-10 bg-white border border-gray-200 text-center rounded-xl text-[10px] font-black uppercase tracking-wider text-stone-600 hover:bg-[#1a1a2e] hover:text-[#e8c9a0] hover:border-[#1a1a2e] transition-all shadow-sm flex items-center justify-center hover:scale-105">
+                                class="w-full sm:w-auto px-6 h-10 bg-white border border-gray-200 text-center rounded-xl text-[10px] font-black uppercase tracking-wider text-stone-600 hover:bg-[#1a1a2e] hover:text-[#e8c9a0] hover:border-[#1a1a2e] transition-all shadow-sm flex items-center justify-center">
                                     Detailed Receipt
                                 </a>
                             </div>
                         </div>
-
                     </div>
                 @endforeach
 

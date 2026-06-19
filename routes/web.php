@@ -15,8 +15,12 @@ use App\Http\Controllers\Customer\CartController;
 use App\Http\Controllers\Customer\OrderController as CustomerOrderController;
 use App\Http\Controllers\Customer\ReviewController as CustomerReviewController;
 use App\Http\Controllers\RajaOngkirController;
+use App\Http\Controllers\Customer\VoucherController;
+use App\Http\Controllers\Admin\VoucherController as AdminVoucherController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Foundation\Auth\EmailVerificationRequest;
+use Illuminate\Http\Request;
 
 /*
 |--------------------------------------------------------------------------
@@ -46,6 +50,25 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->n
 
 /*
 |--------------------------------------------------------------------------
+| Email Verification Routes (Tambahan untuk Mailpit)
+|--------------------------------------------------------------------------
+*/
+Route::get('/email/verify', function () {
+    return view('auth.verify-email');
+})->middleware('auth')->name('verification.notice');
+
+Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
+    $request->fulfill();
+    return redirect('/home');
+})->middleware(['auth', 'signed'])->name('verification.verify');
+
+Route::post('/email/verification-notification', function (Request $request) {
+    $request->user()->sendEmailVerificationNotification();
+    return back()->with('success', 'Tautan verifikasi baru telah dikirim!');
+})->middleware(['auth', 'throttle:6,1'])->name('verification.send');
+
+/*
+|--------------------------------------------------------------------------
 | Admin Routes
 |--------------------------------------------------------------------------
 */
@@ -68,6 +91,8 @@ Route::prefix('admin')->middleware(['auth', 'is_admin'])->name('admin.')->group(
         Route::get('/{order}', [AdminOrderController::class, 'show'])->name('show');
         Route::patch('/{order}/status', [AdminOrderController::class, 'updateStatus'])->name('update-status');
     });
+    
+    Route::resource('vouchers', AdminVoucherController::class);
 
     Route::get('/reviews', [App\Http\Controllers\Admin\ReviewController::class, 'index'])->name('reviews.index');
     Route::patch('/reviews/{review}/approve', [App\Http\Controllers\Admin\ReviewController::class, 'approve'])->name('reviews.approve');
@@ -79,7 +104,8 @@ Route::prefix('admin')->middleware(['auth', 'is_admin'])->name('admin.')->group(
 | Customer Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth')->name('customer.')->group(function () {
+// Menambahkan middleware 'verified' agar user wajib verifikasi email
+Route::middleware(['auth', 'verified'])->name('customer.')->group(function () {
     Route::get('/home', [HomeController::class, 'index'])->name('home');
     
     Route::prefix('cart')->name('cart.')->group(function () { 
@@ -103,29 +129,32 @@ Route::middleware('auth')->name('customer.')->group(function () {
     });
 
     Route::post('/reviews', [CustomerReviewController::class, 'store'])->name('reviews.store');
+    
+    Route::get('/vouchers', [VoucherController::class, 'index'])->name('vouchers.index');
+    Route::post('/vouchers/{voucher}/redeem', [VoucherController::class, 'redeem'])->name('vouchers.redeem');
+    
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-/*
-|--------------------------------------------------------------------------
-| RajaOngkir API Routing (Sync dengan AJAX di Checkout Page)
-|--------------------------------------------------------------------------
-*/
-Route::middleware('auth')->prefix('api')->group(function () {
-    Route::get('/provinces', [App\Http\Controllers\RajaOngkirController::class, 'getProvincesJson'])->name('api.provinces');
-    Route::get('/cities/{province_id}', [App\Http\Controllers\RajaOngkirController::class, 'getCities'])->name('api.cities');
-    Route::get('/districts/{city_id}', [App\Http\Controllers\RajaOngkirController::class, 'getDistricts'])->name('api.districts');
-    Route::post('/check-cost', [App\Http\Controllers\RajaOngkirController::class, 'checkOngkir'])->name('api.check-cost');
-});
-
-/*
-|--------------------------------------------------------------------------
-| Profile & Logic
-|--------------------------------------------------------------------------
-*/
+// Pastikan blok ini ada dan tidak terhapus
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+/*
+|--------------------------------------------------------------------------
+| API Routing
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth')->prefix('api')->group(function () {
+    Route::get('/provinces', [RajaOngkirController::class, 'getProvincesJson'])->name('api.provinces');
+    Route::get('/cities/{province_id}', [RajaOngkirController::class, 'getCities'])->name('api.cities');
+    Route::get('/districts/{city_id}', [RajaOngkirController::class, 'getDistricts'])->name('api.districts');
+    Route::post('/check-cost', [RajaOngkirController::class, 'checkOngkir'])->name('api.check-cost');
 });
 
 Route::get('/redirect-after-login', function () {
