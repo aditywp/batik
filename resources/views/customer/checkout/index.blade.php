@@ -260,7 +260,7 @@ $(document).ready(function () {
     function updateGrandTotal() {
         let subtotal = parseInt($('#grand-total').data('subtotal'));
         let finalTotal = (subtotal + selectedCourierCost) - selectedVoucherDiscount;
-        if (finalTotal < 0) finalTotal = 0;
+        if (finalTotal < 0) finalTotal = 0; // Cegah hasil minus
 
         $('#shipping-cost').text('Rp ' + selectedCourierCost.toLocaleString('id-ID'));
         $('#grand-total').text('Rp ' + finalTotal.toLocaleString('id-ID'));
@@ -343,9 +343,16 @@ $(document).ready(function () {
                 courier: selectedCourierName, 
                 courier_service: selectedCourierService, 
                 shipping_cost: selectedCourierCost,
-                user_voucher_id: selectedVoucherId // Kirim ID Voucher yang digunakan
+                user_voucher_id: selectedVoucherId // Kirim ID Voucher
             },
             success: function (response) {
+                // PERBAIKAN: Jika Pesanan Gratis (Dipotong Full Voucher), Jangan Panggil Midtrans
+                if (response.is_free) {
+                    window.location.href = "/checkout/finish?order_id=" + response.order_code;
+                    return; // Hentikan eksekusi script ini
+                }
+
+                // Jika Tidak Gratis, Buka Popup Midtrans
                 if (response.snap_token) {
                     snap.pay(response.snap_token, {
                         onSuccess: function() { window.location.href = "/checkout/finish?order_id=" + response.order_code; },

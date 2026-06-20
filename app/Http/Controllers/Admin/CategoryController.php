@@ -10,14 +10,22 @@ use Illuminate\Support\Str;
 class CategoryController extends Controller
 {
     /**
-     * Menampilkan daftar kategori
+     * Menampilkan daftar kategori dengan fitur Pencarian
      */
-    public function index()
+    public function index(Request $request)
     {
-    // Menampilkan 10 data per halaman
-    $categories = Category::query()->latest()->paginate(10);
+        // Memulai query builder
+        $query = Category::query()->latest();
+
+        // Logika Pencarian berdasarkan nama kategori
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
+
+        // Menampilkan 10 data per halaman dan mempertahankan parameter pencarian di URL
+        $categories = $query->paginate(10)->withQueryString();
+
         return view('admin.categories.index', compact('categories'));
-        
     }
 
     /**
@@ -40,11 +48,30 @@ class CategoryController extends Controller
     }
 
     /**
+     * Memperbarui kategori di database (EDIT)
+     */
+    public function update(Request $request, Category $category)
+    {
+        // Validasi input: mengecualikan ID kategori saat ini dari aturan unique
+        $request->validate([
+            'name' => 'required|string|max:255|unique:categories,name,' . $category->id,
+        ]);
+
+        // Update kategori
+        $category->update([
+            'name' => $request->name,
+            'slug' => Str::slug($request->name),
+        ]);
+
+        return redirect()->back()->with('success', 'Kategori batik berhasil diperbarui!');
+    }
+
+    /**
      * Menghapus kategori
      */
     public function destroy(Category $category)
     {
-        // Cek apakah kategori masih memiliki produk sebelum dihapus (Opsional untuk keamanan data)
+        // Cek apakah kategori masih memiliki produk sebelum dihapus
         if ($category->products()->count() > 0) {
             return redirect()->back()->with('error', 'Kategori tidak bisa dihapus karena masih memiliki produk!');
         }

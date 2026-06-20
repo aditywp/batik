@@ -69,14 +69,18 @@
                     @if($order->paid_at)
                     <div class="flex justify-between">
                         <span class="text-stone-400">Dibayar</span>
-                        <span class="text-stone-700">{{ $order->paid_at->format('d M Y H:i') }}</span>
+                        <span class="text-stone-700">{{ \Carbon\Carbon::parse($order->paid_at)->format('d M Y H:i') }}</span>
                     </div>
                     @endif
                 </div>
             </div>
 
             {{-- Update Status --}}
-            @php $allowed = $order->allowedNextStatuses(); @endphp
+            @php 
+                $allowed = array_filter($order->allowedNextStatuses(), function($status) {
+                    return $status !== 'cancelled';
+                }); 
+            @endphp
 
             <div class="bg-white rounded-xl border border-stone-200 p-5">
                 <h3 class="text-sm font-semibold text-stone-700 mb-1">Update Status</h3>
@@ -99,7 +103,7 @@
                                               cursor-pointer hover:bg-stone-50 transition-colors
                                               has-[:checked]:border-stone-800 has-[:checked]:bg-stone-50">
                                     <input type="radio" name="status" value="{{ $nextStatus }}" 
-                                           x-model="selectedStatus" class="accent-stone-900">
+                                           x-model="selectedStatus" class="accent-stone-900" required>
                                     <span class="text-sm text-stone-700">{{ $info['label'] }}</span>
                                 </label>
                             @endforeach
@@ -190,9 +194,22 @@
                         <span>Ongkir ({{ strtoupper($order->courier ?? '') }} {{ $order->courier_service }})</span>
                         <span>Rp {{ number_format($order->shipping_cost, 0, ',', '.') }}</span>
                     </div>
+                    
+                    {{-- PERBAIKAN: Hitung otomatis diskon voucher dari selisih matematika --}}
+                    @php
+                        $calculatedDiscount = ($order->subtotal + $order->shipping_cost) - $order->total;
+                    @endphp
+                    
+                    @if($calculatedDiscount > 0)
+                    <div class="flex justify-between text-sm text-emerald-600 font-semibold bg-emerald-50 -mx-5 px-5 py-2">
+                        <span>Diskon Voucher</span>
+                        <span>- Rp {{ number_format($calculatedDiscount, 0, ',', '.') }}</span>
+                    </div>
+                    @endif
+
                     <div class="flex justify-between text-base font-semibold text-stone-900
                                 pt-3 mt-1 border-t border-stone-100">
-                        <span>Total</span>
+                        <span>Total Tagihan</span>
                         <span>Rp {{ number_format($order->total, 0, ',', '.') }}</span>
                     </div>
                 </div>
@@ -251,4 +268,7 @@
     </div>
 </div>
 
+<style>
+    [x-cloak] { display: none !important; }
+</style>
 @endsection

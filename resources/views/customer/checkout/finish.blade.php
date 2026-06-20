@@ -75,7 +75,14 @@
 
             <div class="flex justify-between items-center text-xs">
                 <span class="text-gray-400 font-bold uppercase tracking-wider">Metode Pembayaran</span>
-                <span class="font-extrabold text-[#1a1a2e]">{{ $order->payment_method ?? 'Midtrans Gateway' }}</span>
+                {{-- PERBAIKAN: JIKA TAGIHAN RP 0 (GRATIS), JANGAN TAMPILKAN TULISAN MIDTRANS --}}
+                <span class="font-extrabold text-[#1a1a2e]">
+                    @if($order->total == 0)
+                        Voucher (Gratis)
+                    @else
+                        {{ $order->payment_method ?? 'Midtrans Gateway' }}
+                    @endif
+                </span>
             </div>
 
             <div class="border-t border-dashed border-stone-200 pt-4 flex justify-between items-center">

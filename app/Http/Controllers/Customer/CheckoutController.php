@@ -75,18 +75,25 @@ class CheckoutController extends Controller
         // Total akhir dikurangi diskon voucher
         $total = ($subtotal + $request->shipping_cost) - $discount;
         if ($total < 0) {
-            $total = 0; // Jaga-jaga agar tidak minus
+            $total = 0; // Jaga-jaga agar tidak minus. Jika voucher lebih besar, total = 0.
         }
 
         DB::transaction(function () use ($request, $cartItems, $subtotal, $total, $voucherToUse, &$order) {
+            
+            // LOGIKA LUNAS OTOMATIS: Jika total 0 (gratis), langsung lunas.
+            $paymentStatus = $total == 0 ? 'paid' : 'unpaid';
+            $orderStatus   = $total == 0 ? 'processing' : 'pending';
+            $paidAt        = $total == 0 ? now() : null;
+
             $order = Order::create([
                 'user_id'          => Auth::id(),
                 'order_code'       => 'BI-' . now()->format('Ymd') . '-' . strtoupper(Str::random(5)),
                 'subtotal'         => $subtotal,
                 'shipping_cost'    => $request->shipping_cost,
                 'total'            => $total,
-                'status'           => 'pending',
-                'payment_status'   => 'unpaid',
+                'status'           => $orderStatus,       // Dinamis
+                'payment_status'   => $paymentStatus,     // Dinamis
+                'paid_at'          => $paidAt,            // Dinamis
                 'shipping_address' => $request->shipping_address,
                 'courier'          => $request->courier,
                 'courier_service'  => $request->courier_service,
@@ -94,7 +101,7 @@ class CheckoutController extends Controller
                 'user_voucher_id'  => $voucherToUse ? $voucherToUse->pivot->id : null,
             ]);
 
-            // Kunci voucher menjadi terpakai jika customer memilih voucher
+            // Kunci voucher menjadi terpakai (HANGUS) jika customer menggunakan voucher
             if ($voucherToUse) {
                 DB::table('user_vouchers')
                     ->where('id', $voucherToUse->pivot->id)
@@ -126,10 +133,24 @@ class CheckoutController extends Controller
         });
 
         $order->load('items.product');
+
+        // ==============================================================
+        // BYPASS MIDTRANS: JIKA PESANAN GRATIS (0), JANGAN PANGGIL API MIDTRANS
+        // ==============================================================
+        if ($total == 0) {
+            return response()->json([
+                'is_free'    => true, // Penanda untuk frontend bahwa ini pesanan gratis
+                'order_code' => $order->order_code,
+                'message'    => 'Pesanan gratis karena terpotong voucher sepenuhnya.'
+            ]);
+        }
+
+        // JIKA TIDAK GRATIS, LANJUTKAN KE MIDTRANS NORMAL
         $snapToken = $this->midtrans->createSnapToken($order);
         $order->update(['snap_token' => $snapToken]);
 
         return response()->json([
+            'is_free'    => false,
             'snap_token' => $snapToken,
             'order_code' => $order->order_code,
             'client_key' => config('services.midtrans.client_key'),
@@ -146,6 +167,11 @@ class CheckoutController extends Controller
             ->where('order_code', $request->order_id)
             ->where('user_id', Auth::id())
             ->firstOrFail();
+
+        // JIKA PESANAN SUDAH LUNAS KARENA VOUCHER (Rp 0), LEWATI CEK MIDTRANS
+        if ($order->total == 0 && $order->payment_status === 'paid') {
+            return view('customer.checkout.finish', compact('order'));
+        }
 
         try {
             \Midtrans\Config::$serverKey = config('services.midtrans.server_key');

@@ -6,284 +6,242 @@
     [x-cloak] { display: none !important; }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    /* Custom select style for modern look */
+    .modern-select {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+        background-position: right 0.5rem center;
+        background-repeat: no-repeat;
+        background-size: 1.5em 1.5em;
+    }
 </style>
 
-<div class="container mx-auto p-6 font-sans" x-data="{ showFilters: true, isExporting: false }">
-    {{-- Header Section --}}
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+<div class="container mx-auto p-4 md:p-8 font-sans" x-data="{ isExporting: false }">
+    
+    {{-- 1. HEADER & INLINE FILTER SECTION --}}
+    <div class="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-8 gap-6">
         <div>
-            <h1 class="text-4xl font-black text-[#1a1a2e] tracking-tighter uppercase italic">Analytics Center</h1>
-            <p class="text-slate-400 text-sm font-medium">Laporan performa penjualan komprehensif & rekapitulasi finansial toko.</p>
+            <h1 class="text-3xl font-black text-[#1a1a2e] tracking-tight mb-1">Analytics Center</h1>
+            <p class="text-slate-500 text-sm font-medium">Pantau performa penjualan dan tren transaksi toko Anda.</p>
         </div>
         
-        <div class="flex items-center gap-3 w-full md:w-auto">
-            {{-- Tombol Toggle Panel Filter Modern --}}
-            <button @click="showFilters = !showFilters" class="bg-white border border-slate-200 text-slate-700 px-5 py-3 rounded-2xl font-bold hover:bg-slate-50 transition flex items-center gap-2 shadow-sm text-sm whitespace-nowrap">
-                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-                </svg>
-                Saring Periode
-            </button>
+        {{-- Kontrol Panel (Filter & Export) --}}
+        <div class="w-full xl:w-auto flex flex-col md:flex-row items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
             
-            {{-- Tombol Export Excel Premium dengan Loading Feedback --}}
+            {{-- Form Filter Inline --}}
+            <form action="{{ route('admin.orders.report') }}" method="GET" class="flex flex-col md:flex-row w-full md:w-auto items-center gap-2">
+                <div class="relative w-full md:w-36">
+                    <select name="year" onchange="this.form.submit()" class="modern-select w-full bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-[#1a1a2e] text-xs font-bold py-2.5 pl-4 pr-8 text-slate-700 cursor-pointer transition-all hover:bg-slate-100">
+                        @foreach($availableYears as $yr)
+                            <option value="{{ $yr }}" {{ $selectedYear == $yr ? 'selected' : '' }}>Tahun {{ $yr }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="relative w-full md:w-48">
+                    <select name="month" onchange="this.form.submit()" class="modern-select w-full bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-[#1a1a2e] text-xs font-bold py-2.5 pl-4 pr-8 text-slate-700 cursor-pointer transition-all hover:bg-slate-100">
+                        <option value="">Semua Bulan (Setahun)</option>
+                        @php
+                            $namaBulan = [1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'];
+                        @endphp
+                        @foreach($namaBulan as $num => $name)
+                            <option value="{{ $num }}" {{ $selectedMonth == $num ? 'selected' : '' }}>{{ $name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </form>
+
+            <div class="hidden md:block w-px h-8 bg-slate-200 mx-1"></div>
+
+            {{-- Tombol Export --}}
             <a href="{{ route('admin.orders.exportExcel', request()->query()) }}" 
                @click="isExporting = true; setTimeout(() => isExporting = false, 4000)"
-               class="bg-[#1a1a2e] text-[#e8c9a0] px-6 py-3 rounded-2xl font-bold hover:opacity-90 transition flex items-center justify-center gap-2 shadow-xl shadow-slate-200 text-sm w-full md:w-auto">
+               class="w-full md:w-auto bg-[#1a1a2e] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-xs shadow-md">
                 <template x-if="!isExporting">
                     <div class="flex items-center gap-2">
-                        <svg class="w-4 h-4 text-[#e8c9a0]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                        </svg>
-                        <span>Export Excel Premium</span>
+                        <svg class="w-4 h-4 text-[#e8c9a0]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        <span>Unduh Excel</span>
                     </div>
                 </template>
                 <template x-if="isExporting">
                     <div class="flex items-center gap-2">
-                        <svg class="animate-spin h-4 w-4 text-[#e8c9a0]" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Menyiapkan Berkas...</span>
+                        <svg class="animate-spin h-4 w-4 text-[#e8c9a0]" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span>Menyiapkan...</span>
                     </div>
                 </template>
             </a>
         </div>
     </div>
 
-    {{-- Filter Panel Berbasis Dropdown Multi-Periode Profesional --}}
-    <div x-show="showFilters" x-collapse class="mb-8 p-6 bg-white rounded-3xl border border-slate-100 shadow-sm" x-cloak>
-        <form action="{{ route('admin.orders.report') }}" method="GET" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tahun Analisis</label>
-                <select name="year" class="w-full bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-[#e8c9a0] text-sm font-bold py-3 text-slate-700">
-                    @foreach($availableYears as $yr)
-                        <option value="{{ $yr }}" {{ $selectedYear == $yr ? 'selected' : '' }}>Tahun {{ $yr }}</option>
-                    @endforeach
-                </select>
+    {{-- 2. HERO DASHBOARD (REVENUE & CHART) --}}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        
+        {{-- Hero Card: Gross Revenue --}}
+        <div class="lg:col-span-1 bg-[#1a1a2e] p-8 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col justify-between text-white">
+            <div class="absolute -right-16 -top-16 opacity-5 pointer-events-none">
+                <svg class="w-64 h-64 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
             </div>
-
-            <div>
-                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Bulan (Agregasi Data)</label>
-                <select name="month" class="w-full bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-[#e8c9a0] text-sm font-bold py-3 text-slate-700">
-                    <option value="">-- Semua Bulan (Rekap Setahun) --</option>
-                    @php
-                        $namaBulan = [
-                            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 5 => 'Mei', 6 => 'Juni',
-                            7 => 'Juli', 8 => 'Agustus', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
-                        ];
-                    @endphp
-                    @foreach($namaBulan as $num => $name)
-                        <option value="{{ $num }}" {{ $selectedMonth == $num ? 'selected' : '' }}>{{ $name }}</option>
-                    @endforeach
-                </select>
-            </div>
-
-            <div class="flex items-end">
-                <button type="submit" class="w-full bg-[#e8c9a0] text-[#1a1a2e] py-3.5 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#d4b78d] transition shadow-sm">
-                    Terapkan Filter
-                </button>
-            </div>
-        </form>
-    </div>
-
-    {{-- KELOMPOK BARU: 3 CARD STATISTIK UTAMA LEBIH LENGKAP --}}
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {{-- Card Pendapatan Finansial --}}
-        <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
-            <div>
-                <div class="flex justify-between items-center mb-4">
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Gross Revenue</span>
-                    <span class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">{{ $totalTransactions }} Trx</span>
+            
+            <div class="relative z-10">
+                <h3 class="text-xs font-black text-[#e8c9a0] uppercase tracking-widest mb-2 opacity-90">Total Pendapatan</h3>
+                <div class="text-4xl sm:text-5xl font-black tracking-tight mb-2">
+                    <span class="text-xl font-medium text-slate-400 mr-1">Rp</span>{{ number_format($totalRevenue, 0, ',', '.') }}
                 </div>
-                <h3 class="text-2xl font-black text-[#1a1a2e]">Rp {{ number_format($totalRevenue, 0, ',', '.') }}</h3>
-            </div>
-            <div class="mt-4 border-t border-slate-50 pt-3">
+                
                 @php
                     $grandTotalAllTime = \App\Models\Order::where('payment_status', 'paid')->sum('total');
                     $percentageContribution = $grandTotalAllTime > 0 ? ($totalRevenue / $grandTotalAllTime) * 100 : 0;
                 @endphp
-                <p class="text-[11px] text-slate-400 font-semibold">
-                    Kontribusi periode ini: <span class="text-emerald-600 font-black">↑ {{ number_format($percentageContribution, 1) }}%</span> dari seumur hidup toko.
-                </p>
-            </div>
-        </div>
-
-        {{-- CARD BARU: Estimasi Profit Bersih (Asumsi Margin Bersih 75% Setelah Biaya Kain) --}}
-        <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
-            <div>
-                <div class="flex justify-between items-center mb-4">
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Net Profit Estimation</span>
-                    <span class="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">Margin 75%</span>
-                </div>
-                <h3 class="text-2xl font-black text-emerald-600">Rp {{ number_format($totalRevenue * 0.75, 0, ',', '.') }}</h3>
-            </div>
-            <div class="mt-4 border-t border-slate-50 pt-3">
-                <p class="text-[11px] text-slate-400 font-semibold">
-                    Estimasi Harga Pokok Penjualan (HPP): <span class="text-red-500 font-bold">Rp {{ number_format($totalRevenue * 0.25, 0, ',', '.') }}</span>
-                </p>
-            </div>
-        </div>
-
-        {{-- CARD BARU: Kontribusi Berdasarkan Kategori Koleksi Terlaris --}}
-        <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
-            <div>
-                <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-3">Top Collection Category</span>
-                <div class="space-y-2">
-                    @php
-                        // Mengambil performa koleksi terlaris langsung dari DB pembungkus item order
-                        $collectionStats = \App\Models\OrderItem::selectRaw('products.collection, COUNT(*) as count')
-                            ->join('products', 'order_items.product_id', '=', 'products.id')
-                            ->join('orders', 'order_items.order_id', '=', 'orders.id')
-                            ->where('orders.payment_status', 'paid')
-                            ->groupBy('products.collection')
-                            ->orderByDesc('count')
-                            ->take(2)
-                            ->get();
-                    @endphp
-                    @forelse($collectionStats as $stat)
-                        <div class="flex justify-between items-center text-xs">
-                            <span class="font-bold text-slate-700">{{ $stat->collection ?? 'Uncategorized' }}</span>
-                            <span class="font-mono text-slate-400 bg-slate-50 px-2 py-0.5 rounded">{{ $stat->count }} item terjual</span>
-                        </div>
-                    @empty
-                        <p class="text-xs text-slate-400 italic">Belum ada data barang terjual</p>
-                    @endforelse
+                
+                <div class="inline-flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-lg mt-2 backdrop-blur-sm">
+                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+                    <span class="text-[11px] font-bold text-white">{{ number_format($percentageContribution, 1) }}% dari total selamanya</span>
                 </div>
             </div>
-            <div class="text-[10px] text-slate-400 font-medium border-t border-slate-50 pt-2 mt-2">
-                Diperbarui secara instan sesuai payment gateway.
+
+            <div class="relative z-10 mt-8 pt-6 border-t border-white/10 flex justify-between items-end">
+                <div>
+                    <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">Transaksi Lunas</p>
+                    <p class="text-2xl font-black">{{ $totalTransactions }} <span class="text-sm font-medium text-slate-400">Trx</span></p>
+                </div>
+                <div class="w-12 h-12 rounded-full bg-[#e8c9a0]/20 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-[#e8c9a0]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                </div>
             </div>
         </div>
-    </div>
 
-    {{-- KELOMPOK TENGAH: GRAFIK & PRODUK TERLARIS --}}
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
-        {{-- Grafik Utama Interaktif (Chart.js) --}}
-        <div class="lg:col-span-2 bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
-            <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-4">{{ $chartTitle }}</p>
-            <div class="h-[210px]">
+        {{-- Grafik Penjualan (Chart) --}}
+        <div class="lg:col-span-2 bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-sm font-black text-slate-800 tracking-tight">{{ $chartTitle }}</h3>
+                <span class="text-[10px] font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-full">Real-time</span>
+            </div>
+            <div class="h-[240px] w-full">
                 <canvas id="salesChart"></canvas>
             </div>
         </div>
-
-        {{-- SEKSI BARU: TABEL MINI TOP SELLING PRODUCTS --}}
-        <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
-            <div>
-                <h3 class="text-xs font-black text-[#1a1a2e] uppercase tracking-wider mb-4">Top 3 Selling Items</h3>
-                <div class="divide-y divide-slate-50">
-                    @php
-                        $topProducts = \App\Models\OrderItem::selectRaw('product_id, SUM(quantity) as total_qty')
-                            ->join('orders', 'order_items.order_id', '=', 'orders.id')
-                            ->where('orders.payment_status', 'paid')
-                            ->groupBy('product_id')
-                            ->orderByDesc('total_qty')
-                            ->take(3)
-                            ->with('product')
-                            ->get();
-                    @endphp
-                    @forelse($topProducts as $tp)
-                    <div class="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                        <div class="w-10 h-10 bg-slate-50 rounded-xl overflow-hidden flex-shrink-0 border border-slate-100">
-                            <img src="{{ asset('storage/' . ($tp->product->variants->first()->image_path ?? 'placeholder.jpg')) }}" class="w-full h-full object-cover">
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <h4 class="text-xs font-black text-[#1a1a2e] truncate">{{ $tp->product->name ?? 'Produk Dihapus' }}</h4>
-                            <p class="text-[10px] text-emerald-600 font-bold">Rp {{ number_format($tp->product->price ?? 0, 0, ',', '.') }}</p>
-                        </div>
-                        <div class="text-right">
-                            <span class="text-xs font-black text-slate-700 bg-amber-50 text-amber-800 px-2 py-1 rounded-lg">{{ $tp->total_qty }} pcs</span>
-                        </div>
-                    </div>
-                    @empty
-                    <p class="text-xs text-slate-400 italic py-4 text-center">Belum ada komparasi data penjualan produk.</p>
-                    @endforelse
-                </div>
-            </div>
-            <p class="text-[9px] text-slate-400 mt-4 pt-2 border-t border-slate-50">Mengabaikan pesanan batal/belum dibayar.</p>
-        </div>
     </div>
 
-    {{-- Main Table --}}
-    <div class="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
-        <div class="p-8 border-b border-slate-50 flex justify-between items-center">
-            <h3 class="font-black text-[#1a1a2e] uppercase tracking-widest text-xs">Transaction Logs</h3>
-            <span class="text-[10px] bg-slate-100 text-slate-500 px-3 py-1 rounded-full font-bold">Total Baris: {{ $orders->total() }}</span>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-left">
-                <thead>
-                    <tr class="bg-slate-50/50">
-                        <th class="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID</th>
-                        <th class="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Details</th>
-                        <th class="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Amount</th>
-                        <th class="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Timestamp</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-50">
-                    @forelse($orders as $order)
-                    <tr class="hover:bg-slate-50/50 transition-all group">
-                        <td class="p-6 font-mono text-xs font-bold text-slate-400 group-hover:text-[#1a1a2e]">#{{ $order->order_code }}</td>
-                        <td class="p-6">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-[#1a1a2e]">
-                                    {{ strtoupper(substr($order->user->name ?? 'U', 0, 2)) }}
-                                </div>
-                                <div>
-                                    <p class="font-black text-sm text-slate-800 tracking-tight">{{ $order->user->name ?? 'Pembeli Umum' }}</p>
-                                    <p class="text-[10px] text-slate-400 font-medium">{{ $order->user->email ?? '-' }}</p>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="p-6 text-center font-black text-sm italic text-slate-800">
-                            Rp {{ number_format($order->total, 0, ',', '.') }}
-                        </td>
-                        <td class="p-6 text-center">
-                            <span class="text-[10px] font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                                {{ $order->created_at->format('M d, Y') }}
-                            </span>
-                        </td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="4" class="p-16 text-center text-slate-400 italic text-sm">
-                            Tidak ada data transaksi lunas pada periode filter ini.
-                        </td>
-                    </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        {{-- UI Pagination Premium Kustomisasi --}}
-        @if($orders->hasPages())
-        <div class="px-8 py-5 border-t border-slate-50 bg-slate-50/30 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Menampilkan <span class="text-[#1a1a2e] font-black">{{ $orders->firstItem() }}</span> - <span class="text-[#1a1a2e] font-black">{{ $orders->lastItem() }}</span> dari <span class="text-[#1a1a2e] font-black">{{ $orders->total() }}</span> Log Transaksi
-            </div>
-            <div class="flex items-center gap-1">
-                @if ($orders->onFirstPage())
-                    <span class="px-3 py-2 bg-gray-100 text-gray-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Prev</span>
-                @else
-                    <a href="{{ $orders->appends(request()->query())->previousPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-600 hover:border-[#1a1a2e] hover:text-[#1a1a2e] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm">Prev</a>
-                @endif
-
-                <div class="hidden sm:flex items-center gap-1">
-                    @foreach ($orders->getUrlRange(max(1, $orders->currentPage() - 2), min($orders->lastPage(), $orders->currentPage() + 2)) as $page => $url)
-                        <a href="{{ $url . '&' . http_build_query(request()->except('page')) }}" 
-                           class="w-9 h-9 flex items-center justify-center rounded-xl text-xs font-bold transition-all border {{ $page == $orders->currentPage() ? 'bg-[#1a1a2e] text-[#e8c9a0] border-[#1a1a2e] font-black shadow-md shadow-[#1a1a2e]/10' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400' }}">
-                            {{ $page }}
-                        </a>
-                    @endforeach
+    {{-- 3. BOTTOM SECTION (TOP PRODUCTS & LOGS) --}}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {{-- Tabel Mini Top Products --}}
+        <div class="lg:col-span-1 bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm h-fit">
+            <h3 class="text-sm font-black text-[#1a1a2e] mb-6">Produk Paling Laris</h3>
+            <div class="space-y-4">
+                @php
+                    $topProducts = \App\Models\OrderItem::selectRaw('product_id, SUM(quantity) as total_qty')
+                        ->join('orders', 'order_items.order_id', '=', 'orders.id')
+                        ->where('orders.payment_status', 'paid')
+                        ->groupBy('product_id')
+                        ->orderByDesc('total_qty')
+                        ->take(4)
+                        ->with('product')
+                        ->get();
+                @endphp
+                
+                @forelse($topProducts as $tp)
+                <div class="flex items-center gap-4 group">
+                    <div class="w-12 h-12 bg-slate-50 rounded-xl overflow-hidden flex-shrink-0 border border-slate-100 relative">
+                        <img src="{{ asset('storage/' . ($tp->product->variants->first()->image_path ?? 'placeholder.jpg')) }}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <h4 class="text-sm font-bold text-slate-800 truncate mb-0.5">{{ $tp->product->name ?? 'Produk Dihapus' }}</h4>
+                        <p class="text-[11px] text-slate-500 font-medium">Rp {{ number_format($tp->product->price ?? 0, 0, ',', '.') }}</p>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                        <div class="text-sm font-black text-[#1a1a2e] bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
+                            {{ $tp->total_qty }}
+                        </div>
+                    </div>
                 </div>
-
-                @if ($orders->hasMorePages())
-                    <a href="{{ $orders->appends(request()->query())->nextPageUrl() }}" class="px-3 py-2 bg-white border border-gray-200 text-gray-600 hover:border-[#1a1a2e] hover:text-[#1a1a2e] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm">Next</a>
-                @else
-                    <span class="px-3 py-2 bg-gray-100 text-gray-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Next</span>
-                @endif
+                @empty
+                <div class="py-10 text-center flex flex-col items-center justify-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-3">
+                        <svg class="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                    </div>
+                    <p class="text-xs text-slate-400 font-medium">Belum ada data penjualan produk.</p>
+                </div>
+                @endforelse
             </div>
         </div>
-        @endif
+
+        {{-- Main Table Transaction Logs --}}
+        <div class="lg:col-span-2 bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+            <div class="p-6 md:p-8 border-b border-slate-50 flex justify-between items-center bg-white">
+                <h3 class="font-black text-[#1a1a2e] text-sm">Riwayat Transaksi Lunas</h3>
+                <span class="text-[10px] bg-slate-50 text-slate-500 px-3 py-1 rounded-lg font-bold border border-slate-100">Total: {{ $orders->total() }}</span>
+            </div>
+            
+            <div class="overflow-x-auto flex-1">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="bg-slate-50/50">
+                            <th class="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Order ID</th>
+                            <th class="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest w-2/4">Detail Pelanggan</th>
+                            <th class="p-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right w-1/4">Nominal</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50">
+                        @forelse($orders as $order)
+                        <tr class="hover:bg-slate-50/50 transition-colors group">
+                            <td class="p-5">
+                                <span class="font-mono text-xs font-bold text-slate-500 group-hover:text-[#1a1a2e] transition-colors">
+                                    #{{ $order->order_code }}
+                                </span>
+                                <div class="text-[9px] text-slate-400 mt-1 font-medium">{{ $order->created_at->format('d M Y, H:i') }}</div>
+                            </td>
+                            <td class="p-5">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-[#1a1a2e]/5 border border-[#1a1a2e]/10 flex items-center justify-center text-[10px] font-black text-[#1a1a2e] flex-shrink-0">
+                                        {{ strtoupper(substr($order->user->name ?? 'U', 0, 2)) }}
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="font-bold text-xs text-slate-800 truncate">{{ $order->user->name ?? 'Pembeli Umum' }}</p>
+                                        <p class="text-[10px] text-slate-500 truncate mt-0.5">{{ $order->user->email ?? '-' }}</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="p-5 text-right">
+                                <span class="font-black text-sm text-[#1a1a2e]">
+                                    Rp {{ number_format($order->total, 0, ',', '.') }}
+                                </span>
+                            </td>
+                        </tr>
+                        @empty
+                        <tr>
+                            <td colspan="3" class="p-16 text-center text-slate-400 text-sm font-medium">
+                                Tidak ada riwayat transaksi pada periode yang dipilih.
+                            </td>
+                        </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            {{-- Custom Pagination Bawah --}}
+            @if($orders->hasPages())
+            <div class="px-6 py-4 border-t border-slate-50 bg-slate-50/30 flex items-center justify-between mt-auto">
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">
+                    Hal {{ $orders->currentPage() }} dari {{ $orders->lastPage() }}
+                </div>
+                <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                    @if ($orders->onFirstPage())
+                        <span class="px-4 py-2 bg-slate-100 text-slate-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Prev</span>
+                    @else
+                        <a href="{{ $orders->appends(request()->query())->previousPageUrl() }}" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:border-[#1a1a2e] hover:text-[#1a1a2e] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm">Prev</a>
+                    @endif
+
+                    @if ($orders->hasMorePages())
+                        <a href="{{ $orders->appends(request()->query())->nextPageUrl() }}" class="px-4 py-2 bg-[#1a1a2e] text-[#e8c9a0] text-xs font-black rounded-xl uppercase tracking-widest transition-all shadow-sm hover:opacity-90">Next</a>
+                    @else
+                        <span class="px-4 py-2 bg-slate-100 text-slate-300 text-xs font-black rounded-xl uppercase tracking-widest cursor-not-allowed">Next</span>
+                    @endif
+                </div>
+            </div>
+            @endif
+        </div>
     </div>
 </div>
 
@@ -297,48 +255,70 @@
         const dataValues = {!! json_encode($chartData ?? []) !!};
         const isMonthlyMode = {!! json_encode($selectedMonth ? true : false) !!};
 
+        // Buat Gradient untuk Line Chart agar lebih elegan
+        let gradient = ctx.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, 'rgba(232, 201, 160, 0.4)');
+        gradient.addColorStop(1, 'rgba(232, 201, 160, 0.0)');
+
         new Chart(ctx, {
             type: isMonthlyMode ? 'line' : 'bar',
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Omset Penjualan',
+                    label: 'Pendapatan',
                     data: dataValues,
                     borderColor: '#1a1a2e',
-                    backgroundColor: isMonthlyMode ? 'rgba(26, 26, 46, 0.04)' : '#e8c9a0',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.38,
-                    pointRadius: 4,
+                    backgroundColor: isMonthlyMode ? gradient : '#1a1a2e',
+                    borderWidth: isMonthlyMode ? 3 : 0,
+                    fill: isMonthlyMode,
+                    tension: 0.4, // Kurva yang lebih mulus (smooth)
+                    pointRadius: isMonthlyMode ? 4 : 0,
                     pointBackgroundColor: '#e8c9a0',
-                    borderRadius: 6
+                    pointBorderColor: '#1a1a2e',
+                    pointBorderWidth: 2,
+                    borderRadius: isMonthlyMode ? 0 : 6,
+                    barPercentage: 0.6 // Lebar batang yang proporsional
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                layout: {
-                    padding: {
-                        left: 15,
-                        right: 10
-                    }
+                interaction: {
+                    intersect: false,
+                    mode: 'index',
                 },
                 plugins: {
-                    legend: { display: false }
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a1a2e',
+                        titleColor: '#e8c9a0',
+                        bodyColor: '#ffffff',
+                        padding: 12,
+                        cornerRadius: 8,
+                        callbacks: {
+                            label: function(context) {
+                                return ' Rp ' + context.parsed.y.toLocaleString('id-ID');
+                            }
+                        }
+                    }
                 },
                 scales: {
                     x: {
                         grid: { display: false },
-                        ticks: { font: { size: 10, family: 'Plus Jakarta Sans' } }
+                        ticks: { font: { size: 11, family: 'Plus Jakarta Sans', weight: '600' }, color: '#94a3b8' }
                     },
                     y: {
                         beginAtZero: true,
-                        grid: { color: '#f8fafc' },
+                        border: { display: false },
+                        grid: { color: '#f1f5f9', drawTicks: false },
                         ticks: { 
-                            font: { size: 10, family: 'Plus Jakarta Sans' },
-                            padding: 8, 
+                            font: { size: 10, family: 'Plus Jakarta Sans', weight: '500' },
+                            color: '#94a3b8',
+                            padding: 12,
                             callback: function(value) {
-                                return 'Rp ' + value.toLocaleString('id-ID');
+                                if(value >= 1000000) return 'Rp ' + (value / 1000000) + ' Jt';
+                                if(value >= 1000) return 'Rp ' + (value / 1000) + ' Rb';
+                                return 'Rp ' + value;
                             }
                         }
                     }

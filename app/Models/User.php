@@ -54,8 +54,16 @@ class User extends Authenticatable implements MustVerifyEmail
     protected static function booted()
     {
         static::created(function ($user) {
+            // Ambil waktu sekarang
+            $now = \Carbon\Carbon::now('Asia/Jakarta');
+
+            // PERBAIKAN: Pastikan Welcome Voucher yang dibagikan masih aktif dan belum expired
             $welcomeVoucher = \App\Models\Voucher::where('is_welcome_voucher', true)
                                 ->where('is_active', true)
+                                ->where(function($query) use ($now) {
+                                    $query->whereNull('valid_until')
+                                          ->orWhere('valid_until', '>=', $now);
+                                })
                                 ->first();
 
             if ($welcomeVoucher) {

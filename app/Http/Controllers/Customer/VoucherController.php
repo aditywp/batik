@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Voucher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
 
 class VoucherController extends Controller
 {
@@ -13,9 +14,17 @@ class VoucherController extends Controller
     {
         $user = Auth::user();
         
+        // PERBAIKAN 1: Ambil tanggal hari ini saja tanpa jam (format YYYY-MM-DD)
+        $today = Carbon::now('Asia/Jakarta')->toDateString(); 
+        
         // Master voucher untuk ditukar (Redeem)
         $vouchers = Voucher::where('is_active', true)
             ->where('is_welcome_voucher', false)
+            ->where(function($query) use ($today) {
+                $query->whereNull('valid_until')
+                      // Menggunakan orWhereDate agar sistem mengabaikan jam 00:00:00 di database
+                      ->orWhereDate('valid_until', '>=', $today); 
+            })
             ->get();
 
         // Ambil semua voucher user
@@ -31,15 +40,29 @@ class VoucherController extends Controller
     public function redeem(Voucher $voucher)
     {
         $user = Auth::user();
+        $now = Carbon::now('Asia/Jakarta');
 
-        if (!$voucher->is_active) {
-            return redirect()->back()->with('error', 'Voucher ini sudah tidak aktif.');
+        // PERBAIKAN 2: Paksa tanggal kedaluwarsa ke ujung hari (jam 23:59:59) sebelum dibandingkan
+        $isExpired = $voucher->valid_until && Carbon::parse($voucher->valid_until, 'Asia/Jakarta')->endOfDay()->lessThan($now);
+
+        // 1. Validasi Status dan Kedaluwarsa
+        if (!$voucher->is_active || $isExpired) {
+            return redirect()->back()->with('error', 'Maaf, voucher ini sudah tidak aktif atau telah kedaluwarsa.');
         }
 
+        // 2. Validasi Duplikasi (Keamanan Tambahan)
+        // Mengecek apakah user sudah menukar voucher ini dan belum memakainya
+        $alreadyHasVoucher = $user->vouchers()->where('voucher_id', $voucher->id)->wherePivot('is_used', false)->exists();
+        if ($alreadyHasVoucher) {
+             return redirect()->back()->with('error', 'Anda sudah menukarkan voucher ini dan belum menggunakannya.');
+        }
+
+        // 3. Validasi Ketersediaan Poin
         if ($user->points < $voucher->points_required) {
-            return redirect()->back()->with('error', 'Poin Anda tidak cukup.');
+            return redirect()->back()->with('error', 'Poin Anda tidak cukup untuk menukar voucher ini.');
         }
 
+        // 4. Proses Penukaran Poin
         $user->decrement('points', $voucher->points_required);
         $user->vouchers()->attach($voucher->id);
 
