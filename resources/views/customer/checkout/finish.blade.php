@@ -7,8 +7,8 @@
     <div class="max-w-2xl w-full bg-white rounded-[2.5rem] shadow-xl shadow-stone-100 p-8 md:p-12 border border-stone-100">
 
         {{-- LOGIKA DETEKSI STATUS PEMBAYARAN PREMIUM --}}
-        @if($order->payment_status === 'paid')
-            {{-- ISI 1: KONDISI PEMBAYARAN BERHASIL (LUNAS) --}}
+        @if($order->payment_status === 'paid' || $order->payment_status === 'settlement')
+            {{-- KONDISI 1: PEMBAYARAN BERHASIL (LUNAS) --}}
             <div class="flex justify-center mb-6">
                 <div class="w-20 h-20 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
                     <svg class="w-10 h-10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -22,8 +22,9 @@
                 <p class="text-gray-400 text-sm mt-1">Terima kasih, pembayaran Anda telah kami terima. Pesanan akan segera diproses oleh tim Batik Ifawati.</p>
             </div>
 
-        @elseif($order->payment_status === 'pending')
-            {{-- ISI 2: KONDISI PEMBAYARAN TERTUNDA (MENUNGGU TRANSFER BANK/VA) --}}
+        {{-- Jika pengguna membatalkan popup (X), Midtrans menyimpannya sebagai "unpaid" atau "pending" --}}
+        @elseif(in_array(strtolower($order->payment_status), ['pending', 'unpaid', '']))
+            {{-- KONDISI 2: PEMBAYARAN TERTUNDA (MENUNGGU TRANSFER) --}}
             <div class="flex justify-center mb-6">
                 <div class="w-20 h-20 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 animate-pulse">
                     <svg class="w-10 h-10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -34,11 +35,11 @@
             <div class="text-center mb-10">
                 <span class="text-[10px] font-black uppercase bg-amber-50 text-amber-700 px-3 py-1 rounded-md tracking-widest border border-amber-100">Awaiting Payment</span>
                 <h1 class="text-3xl font-black tracking-tight text-[#1a1a2e] mt-4 uppercase italic">Menunggu Pembayaran</h1>
-                <p class="text-gray-400 text-sm mt-1">Selesaikan transfer Anda sesuai instruksi Midtrans sebelum batas waktu berakhir agar pesanan tidak batal otomatis.</p>
+                <p class="text-gray-400 text-sm mt-1">Pesanan Anda telah disimpan. Silakan selesaikan pembayaran untuk memproses pengiriman.</p>
             </div>
 
         @else
-            {{-- ISI 3: KONDISI PEMBAYARAN GAGAL / KEDALUWARSA / BATAL --}}
+            {{-- KONDISI 3: PEMBAYARAN GAGAL / EXPIRED / DIBATALKAN OLEH ADMIN --}}
             <div class="flex justify-center mb-6">
                 <div class="w-20 h-20 rounded-full bg-red-50 border border-red-100 flex items-center justify-center text-red-600">
                     <svg class="w-10 h-10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -48,8 +49,8 @@
             </div>
             <div class="text-center mb-10">
                 <span class="text-[10px] font-black uppercase bg-red-50 text-red-700 px-3 py-1 rounded-md tracking-widest border border-red-100">Payment Failed</span>
-                <h1 class="text-3xl font-black tracking-tight text-[#1a1a2e] mt-4 uppercase italic">Transaksi Gagal</h1>
-                <p class="text-gray-400 text-sm mt-1">Sistem mendeteksi adanya kendala otentikasi pembayaran atau transaksi telah dibatalkan.</p>
+                <h1 class="text-3xl font-black tracking-tight text-[#1a1a2e] mt-4 uppercase italic">Transaksi Dibatalkan</h1>
+                <p class="text-gray-400 text-sm mt-1">Waktu pembayaran telah habis atau pesanan dibatalkan.</p>
             </div>
         @endif
 
@@ -75,12 +76,31 @@
 
             <div class="flex justify-between items-center text-xs">
                 <span class="text-gray-400 font-bold uppercase tracking-wider">Metode Pembayaran</span>
-                {{-- PERBAIKAN: JIKA TAGIHAN RP 0 (GRATIS), JANGAN TAMPILKAN TULISAN MIDTRANS --}}
-                <span class="font-extrabold text-[#1a1a2e]">
+                <span class="font-extrabold text-[#1a1a2e] text-right uppercase">
                     @if($order->total == 0)
-                        Voucher (Gratis)
+                        VOUCHER (GRATIS)
                     @else
-                        {{ $order->payment_method ?? 'Midtrans Gateway' }}
+                        @php
+                            $displayPayment = 'Menunggu Pembayaran';
+                            
+                            // 1. Jika ada parameter payment_type dari URL (Trik khusus saat di Localhost)
+                            if(request('payment_type')) {
+                                $pt = request('payment_type');
+                                if($pt == 'bank_transfer') $displayPayment = 'Transfer Bank (VA)';
+                                elseif($pt == 'echannel') $displayPayment = 'Mandiri Bill Payment';
+                                elseif($pt == 'cstore') $displayPayment = 'Minimarket (Alfamart/Indomaret)';
+                                elseif($pt == 'gopay') $displayPayment = 'GoPay';
+                                elseif($pt == 'shopeepay') $displayPayment = 'ShopeePay';
+                                elseif($pt == 'qris') $displayPayment = 'QRIS';
+                                elseif($pt == 'credit_card') $displayPayment = 'Kartu Kredit';
+                                else $displayPayment = str_replace('_', ' ', $pt);
+                            } 
+                            // 2. Jika database sudah terupdate oleh Webhook (saat di hosting/online nanti)
+                            elseif($order->payment_method && $order->payment_method !== 'Midtrans Gateway') {
+                                $displayPayment = $order->payment_method;
+                            }
+                        @endphp
+                        {{ $displayPayment }}
                     @endif
                 </span>
             </div>
@@ -120,15 +140,14 @@
 
         {{-- TOMBOL AKSI DINAMIS BERDASARKAN STATUS USER EXPERIENCE --}}
         <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
-            @if($order->payment_status === 'pending' && $order->payment_url)
-                {{-- Jika pending, beri tombol untuk membuka ulang invoice Midtrans bayar --}}
+            @if(in_array(strtolower($order->payment_status), ['pending', 'unpaid', '']) && $order->payment_url)
+                {{-- Jika user tekan tombol X, tombol ini akan muncul untuk memicu kembali popup Midtrans --}}
                 <a href="{{ $order->payment_url }}" target="_blank" class="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white px-8 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest text-center shadow-lg shadow-amber-500/10 transition-all">
-                    Bayar Sekarang ↗
+                    Lanjut Pembayaran ↗
                 </a>
             @endif
 
-            @if($order->payment_status === 'paid')
-                {{-- Jika sukses lunas, tawarkan tombol untuk langsung memantau progres pesanan --}}
+            @if($order->payment_status === 'paid' || $order->payment_status === 'settlement')
                 <a href="{{ route('customer.orders.show', $order->order_code) }}" class="w-full sm:w-auto bg-[#1a1a2e] hover:bg-black text-[#e8c9a0] px-8 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest text-center shadow-lg shadow-[#1a1a2e]/10 transition-all">
                     Pantau Pesanan Saya
                 </a>

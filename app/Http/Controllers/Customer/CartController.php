@@ -15,22 +15,18 @@ class CartController extends Controller
      */
     public function index()
     {
-        // Mengambil item keranjang dengan relasi agar tidak query berulang (N+1 Problem)
         $cartItems = Auth::user()->cartItems()->with(['product.variants', 'variant'])->get();
 
         $subtotal = $cartItems->sum(function($item) {
-            // Gunakan harga varian jika ada, jika tidak gunakan harga produk utama
             $price = $item->variant->price ?? $item->product->price;
             return $price * $item->quantity;
         });
 
-        // PERBAIKAN: subtotal dikirim sebagai string 'subtotal' ke fungsi compact
         return view('customer.cart.index', compact('cartItems', 'subtotal'));
     }
 
     /**
      * Menambahkan produk ke dalam keranjang.
-     * Mengatasi Duplicate Entry dengan mengecek Kombinasi User + Produk + Varian.
      */
     public function add(Request $request, int $productId)
     {
@@ -42,17 +38,14 @@ class CartController extends Controller
         $user = Auth::user();
         $qtyToAdd = $request->quantity ?? 1;
 
-        // PENTING: Cek kecocokan User ID, Product ID, DAN Variant ID
         $cartItem = CartItem::where('user_id', $user->id)
             ->where('product_id', $productId)
             ->where('variant_id', $request->variant_id)
             ->first();
 
         if ($cartItem) {
-            // Jika item sudah ada dengan varian yang sama, cukup tambahkan jumlahnya (UPDATE)
             $cartItem->increment('quantity', $qtyToAdd);
         } else {
-            // Jika belum ada kombinasi unik ini, buat baris baru (INSERT)
             CartItem::create([
                 'user_id'    => $user->id,
                 'product_id' => $productId,
@@ -71,7 +64,7 @@ class CartController extends Controller
     {
         $request->validate([
             'action' => 'required|in:increase,decrease,manual',
-            'quantity' => 'nullable|integer|min:1'
+            'quantity' => 'nullable|integer'
         ]);
 
         $cartItem = CartItem::where('id', $id)
@@ -103,12 +96,17 @@ class CartController extends Controller
         if ($request->action === 'manual') {
             $manualQty = intval($request->quantity);
 
+            // KUNCI BACKEND: Jika admin/user menembus angka 0 atau minus, lemparkan error secara tegas
+            if ($manualQty <= 0) {
+                return back()->with('error', 'Jumlah barang tidak bisa 0. Mohon pilih tombol remove jika ingin menghapus.');
+            }
+
             if ($manualQty > $maxStock) {
                 $cartItem->update(['quantity' => $maxStock]);
                 return back()->with('error', 'Jumlah dibatasi sesuai stok maksimal (' . $maxStock . ').');
             }
             
-            $quantity = max(1, $manualQty);
+            $quantity = $manualQty;
         }
 
         $cartItem->update(['quantity' => $quantity]);
