@@ -79,6 +79,8 @@ Route::prefix('admin')->middleware(['auth', 'is_admin'])->name('admin.')->group(
         return response()->json($product->load(['category', 'variants']));
     })->name('products.json');
 
+    Route::patch('/products/{product}/toggle', [ProductController::class, 'toggleStatus'])->name('products.toggle');
+
     Route::resource('products', ProductController::class);
     Route::resource('categories', CategoryController::class);
     Route::delete('/product-images/{image}', [ProductImageController::class, 'destroy'])->name('product-images.destroy');

@@ -38,11 +38,11 @@
     <div class="flex justify-between items-center mb-8">
         <div>
             <h1 class="text-3xl font-black text-[#1a1a2e] tracking-tight uppercase italic">Daftar Produk Batik</h1>
-            <p class="text-gray-500 text-sm mt-1">Kelola stok dan lihat variasi motif/ukuran secara interaktif.</p>
+            <p class="text-gray-500 text-sm mt-1">Kelola stok dan visibilitas (aktif/nonaktif) produk Anda.</p>
         </div>
 
         <div class="flex items-center gap-4">
-            {{-- Tombol Switch View Mode (Menyimpan status langsung ke URL agar Sticky) --}}
+            {{-- Tombol Switch View Mode --}}
             <div class="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
                 <button @click="viewMode = 'table'; window.history.pushState({}, '', '?viewMode=table')" 
                         :class="viewMode === 'table' ? 'bg-white shadow-sm text-[#1a1a2e]' : 'text-gray-500'"
@@ -64,10 +64,9 @@
         </div>
     </div>
 
-    {{-- PANEL FILTER UTILITY SEARCH & DROPDOWN --}}
+    {{-- PANEL FILTER UTILITY --}}
     <div class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-8">
         <form action="{{ route('admin.products.index') }}" method="GET" class="flex flex-wrap items-end gap-4">
-            {{-- Menyisipkan parameter viewMode ke request form agar filter tidak merusak tampilan --}}
             <input type="hidden" name="viewMode" :value="viewMode">
             
             <div class="flex-1 min-w-[200px]">
@@ -81,7 +80,7 @@
                 </div>
             </div>
 
-            <div class="w-full md:w-[180px]">
+            <div class="w-full md:w-[150px]">
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Kategori</label>
                 <select name="category" onchange="this.form.submit()" 
                         class="w-full bg-gray-50 border-gray-100 rounded-xl text-sm focus:ring-[#1a1a2e] focus:border-[#1a1a2e] h-11">
@@ -94,7 +93,7 @@
                 </select>
             </div>
 
-            <div class="w-full md:w-[150px]">
+            <div class="w-full md:w-[140px]">
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Collections</label>
                 <select name="collection" onchange="this.form.submit()" 
                         class="w-full bg-gray-50 border-gray-100 rounded-xl text-sm focus:ring-[#1a1a2e] focus:border-[#1a1a2e] h-11">
@@ -107,13 +106,24 @@
                 </select>
             </div>
 
-            <div class="w-full md:w-[180px]">
+            <div class="w-full md:w-[150px]">
                 <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Kondisi Stok</label>
                 <select name="stock_status" onchange="this.form.submit()" 
                         class="w-full bg-gray-50 border-gray-100 rounded-xl text-sm focus:ring-[#1a1a2e] focus:border-[#1a1a2e] h-11 font-medium">
-                    <option value="">Semua Status Stok</option>
-                    <option value="low" {{ request('stock_status') === 'low' ? 'selected' : '' }}>⚠️ Stok Menipis (≤ 5)</option>
-                    <option value="empty" {{ request('stock_status') === 'empty' ? 'selected' : '' }}>❌ Stok Habis (0)</option>
+                    <option value="">Semua Stok</option>
+                    <option value="low" {{ request('stock_status') === 'low' ? 'selected' : '' }}>⚠️ Menipis (≤ 5)</option>
+                    <option value="empty" {{ request('stock_status') === 'empty' ? 'selected' : '' }}>❌ Habis (0)</option>
+                </select>
+            </div>
+
+            {{-- TAMBAHAN: FILTER STATUS AKTIF/DRAFT --}}
+            <div class="w-full md:w-[150px]">
+                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Status Katalog</label>
+                <select name="is_active" onchange="this.form.submit()" 
+                        class="w-full bg-gray-50 border-gray-100 rounded-xl text-sm focus:ring-[#1a1a2e] focus:border-[#1a1a2e] h-11 font-medium">
+                    <option value="">Semua Status</option>
+                    <option value="1" {{ request('is_active') === '1' ? 'selected' : '' }}>✅ Aktif</option>
+                    <option value="0" {{ request('is_active') === '0' ? 'selected' : '' }}>📝 Draft</option>
                 </select>
             </div>
 
@@ -121,7 +131,8 @@
                 <button type="submit" class="bg-[#1a1a2e] text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all text-sm h-11">
                     Filter
                 </button>
-                @if(request()->anyFilled(['search', 'category', 'collection', 'stock_status']))
+                {{-- PERBAIKAN: Menambahkan 'is_active' ke dalam tombol Reset --}}
+                @if(request()->anyFilled(['search', 'category', 'collection', 'stock_status', 'is_active']))
                     <a href="{{ route('admin.products.index', ['viewMode' => request('viewMode', 'table')]) }}" 
                        class="px-4 py-2.5 text-xs font-black text-red-500 hover:bg-red-50 rounded-xl transition-colors flex items-center h-11 uppercase tracking-widest">
                         Reset
@@ -139,6 +150,7 @@
                     <th class="p-5 text-xs font-bold text-gray-400 uppercase tracking-wider">Foto</th>
                     <th class="p-5 text-xs font-bold text-gray-400 uppercase tracking-wider">Nama Produk</th>
                     <th class="p-5 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Total Stok</th>
+                    <th class="p-5 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Status</th>
                     <th class="p-5 text-xs font-bold text-gray-400 uppercase tracking-wider text-center">Aksi</th>
                 </tr>
             </thead>
@@ -152,10 +164,10 @@
                             showDetail = true">
                     <td class="p-5">
                         <img src="{{ asset('storage/' . ($product->variants->first()->image_path ?? 'placeholder.jpg')) }}" 
-                             class="w-16 h-16 object-cover rounded-xl shadow-sm border border-gray-100">
+                             class="w-16 h-16 object-cover rounded-xl shadow-sm border border-gray-100 {{ $product->is_active ? '' : 'grayscale opacity-60' }}">
                     </td>
                     <td class="p-5">
-                        <p class="font-bold text-[#1a1a2e]">{{ $product->name }}</p>
+                        <p class="font-bold text-[#1a1a2e] {{ $product->is_active ? '' : 'text-gray-400 line-through decoration-gray-300' }}">{{ $product->name }}</p>
                         <div class="flex gap-2 mt-1">
                             <span class="text-[9px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-black uppercase">{{ $product->category->name ?? 'Batik' }}</span>
                             <span class="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-black uppercase">{{ $product->collection }}</span>
@@ -165,10 +177,23 @@
                         @if($product->stock == 0)
                             <span class="px-3 py-1 bg-red-50 text-red-600 rounded-full text-xs font-extrabold uppercase">Habis</span>
                         @elseif($product->stock <= 5)
-                            <span class="px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-xs font-extrabold uppercase">{{ $product->stock }} pcs (Menipis)</span>
+                            <span class="px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-xs font-extrabold uppercase">{{ $product->stock }} (Menipis)</span>
                         @else
                             <span class="text-[#1a1a2e] text-sm">{{ $product->stock }} pcs</span>
                         @endif
+                    </td>
+                    <td class="p-5 text-center" @click.stop>
+                        {{-- TOGGLE STATUS (AKTIF/DRAFT) --}}
+                        <form action="{{ route('admin.products.toggle', $product->id) }}" method="POST" class="inline-block">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none {{ $product->is_active ? 'bg-[#1a1a2e]' : 'bg-gray-200' }}">
+                                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out {{ $product->is_active ? 'translate-x-5' : 'translate-x-0' }}"></span>
+                            </button>
+                        </form>
+                        <div class="text-[9px] font-black mt-1 uppercase tracking-widest {{ $product->is_active ? 'text-[#1a1a2e]' : 'text-gray-400' }}">
+                            {{ $product->is_active ? 'Aktif' : 'Draft' }}
+                        </div>
                     </td>
                     <td class="p-5" @click.stop>
                         <div class="flex justify-center items-center gap-4">
@@ -184,13 +209,13 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="4" class="p-10 text-center text-gray-400 italic text-sm">Tidak ada produk batik yang terdaftar.</td>
+                    <td colspan="5" class="p-10 text-center text-gray-400 italic text-sm">Tidak ada produk batik yang terdaftar.</td>
                 </tr>
                 @endforelse
             </tbody>
         </table>
 
-        {{-- PAGINATION PRESTIGE UNTUK TAMPILAN TABEL --}}
+        {{-- PAGINATION TABEL --}}
         @if($products->hasPages())
             <div x-show="viewMode === 'table'" class="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -226,7 +251,7 @@
     <div x-show="viewMode === 'grid'" x-transition class="space-y-8">
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             @foreach($products as $product)
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-md transition-all cursor-pointer"
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-md transition-all cursor-pointer {{ $product->is_active ? '' : 'opacity-70 grayscale-[30%]' }}"
                  @click="selectedProduct = {{ $product->load(['category', 'images', 'variants'])->toJson() }}; 
                          activeImage = selectedProduct.variants?.[0]?.image_path || selectedProduct.images?.[0]?.image_path; 
                          selectedMotif = selectedProduct.variants?.[0]?.motif;
@@ -235,6 +260,16 @@
                 <div class="relative aspect-square">
                     <img src="{{ asset('storage/' . ($product->variants->first()->image_path ?? 'placeholder.jpg')) }}" 
                          class="w-full h-full object-cover">
+                    
+                    {{-- LABEL STATUS & STOK (Kiri = Status, Kanan = Stok) --}}
+                    <div class="absolute top-3 left-3">
+                        @if($product->is_active)
+                            <span class="px-2 py-1 bg-[#1a1a2e]/90 backdrop-blur-sm text-[#e8c9a0] text-[9px] font-black rounded-lg shadow-sm uppercase tracking-widest">Aktif</span>
+                        @else
+                            <span class="px-2 py-1 bg-gray-100/90 backdrop-blur-sm text-gray-500 text-[9px] font-black rounded-lg shadow-sm uppercase tracking-widest border border-gray-200">Draft</span>
+                        @endif
+                    </div>
+                    
                     <div class="absolute top-3 right-3">
                         @if($product->stock == 0)
                             <span class="px-2 py-1 bg-red-600 text-white text-[10px] font-black rounded-lg shadow-sm uppercase">Habis</span>
@@ -247,15 +282,27 @@
                 </div>
                 <div class="p-4">
                     <p class="text-[10px] text-gray-400 uppercase tracking-widest mb-1">{{ $product->category->name ?? 'Batik' }} • {{ $product->collection }}</p>
-                    <h3 class="font-bold text-[#1a1a2e] mb-2 truncate">{{ $product->name }}</h3>
+                    <h3 class="font-bold text-[#1a1a2e] mb-2 truncate {{ $product->is_active ? '' : 'line-through decoration-gray-300' }}">{{ $product->name }}</h3>
                     <p class="text-emerald-600 font-bold mb-4">Rp {{ number_format($product->price, 0, ',', '.') }}</p>
                     
                     <div class="flex items-center gap-2 border-t border-gray-50 pt-4" @click.stop>
-                        <a href="{{ route('admin.products.edit', [$product->id, 'redirect_to' => request()->fullUrl()]) }}" class="flex-1 text-center py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors">
+                        <a href="{{ route('admin.products.edit', [$product->id, 'redirect_to' => request()->fullUrl()]) }}" class="flex-1 text-center py-2.5 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 transition-colors">
                             Edit
                         </a>
                         
-                        <button type="button" @click.stop="triggerDelete({{ $product->id }})" class="px-3 py-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-all flex items-center justify-center">
+                        {{-- TOMBOL TOGGLE STATUS (MATA) --}}
+                        <form action="{{ route('admin.products.toggle', $product->id) }}" method="POST" class="flex">
+                            @csrf @method('PATCH')
+                            <button type="submit" title="{{ $product->is_active ? 'Sembunyikan ke Draft' : 'Aktifkan ke Katalog' }}" class="px-3 py-2.5 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-200 transition-all flex items-center justify-center">
+                                @if($product->is_active)
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                @else
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                                @endif
+                            </button>
+                        </form>
+
+                        <button type="button" @click.stop="triggerDelete({{ $product->id }})" title="Hapus Permanen" class="px-3 py-2.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-all flex items-center justify-center">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
@@ -266,7 +313,7 @@
             @endforeach
         </div>
 
-        {{-- PAGINATION PRESTIGE UNTUK TAMPILAN KARTU (GRID) --}}
+        {{-- PAGINATION GRID --}}
         @if($products->hasPages())
             <div x-show="viewMode === 'grid'" class="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
                 <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -307,7 +354,13 @@
             
             <div class="p-8 lg:p-12">
                 <div class="flex justify-between items-center mb-8">
-                    <h2 class="text-xl font-bold text-[#1a1a2e]">Preview Produk</h2>
+                    <div class="flex items-center gap-4">
+                        <h2 class="text-xl font-bold text-[#1a1a2e]">Preview Produk</h2>
+                        {{-- BADGE STATUS DINAMIS DI MODAL --}}
+                        <span class="px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-full border" 
+                              :class="selectedProduct.is_active ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-500 border-gray-200'" 
+                              x-text="selectedProduct.is_active ? 'Katalog: Aktif' : 'Katalog: Disembunyikan (Draft)'"></span>
+                    </div>
                     <button @click="showDetail = false" class="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
                         <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
@@ -344,7 +397,6 @@
                         </div>
 
                         <div class="bg-gray-50 p-6 rounded-3xl mb-8 border border-gray-100">
-                            {{-- LABEL DAN HARGA KINI BERSIFAT DINAMIS --}}
                             <p class="text-xs text-gray-400 mb-1 font-bold uppercase tracking-widest" x-text="priceLabel"></p>
                             <h3 class="text-3xl font-black text-red-600" x-text="'Rp ' + displayPrice"></h3>
                         </div>
@@ -418,7 +470,7 @@
 <script>
     function triggerDelete(productId) {
         Swal.fire({
-            title: 'Hapus Produk Kain?',
+            title: 'Hapus Produk Batik?',
             text: "Data katalog produk beserta seluruh variasi motif/ukuran akan dihapus permanen dari sistem!",
             icon: 'warning',
             showCancelButton: true,
@@ -453,6 +505,23 @@
                     popup: 'rounded-[24px]',
                     title: 'font-sans font-black text-[#e8c9a0] italic',
                     htmlContainer: 'font-sans text-xs font-bold text-white'
+                }
+            });
+        @endif
+
+        @if(session('error'))
+            Swal.fire({
+                icon: 'error',
+                title: 'GAGAL DIHAPUS',
+                text: "{{ session('error') }}",
+                showConfirmButton: true,
+                confirmButtonColor: '#1a1a2e',
+                confirmButtonText: 'Mengerti',
+                background: '#ffffff',
+                customClass: {
+                    popup: 'rounded-[24px]',
+                    title: 'font-sans font-black text-red-600 uppercase tracking-wide',
+                    htmlContainer: 'font-sans text-sm font-medium text-gray-600'
                 }
             });
         @endif

@@ -15,8 +15,12 @@ class HomeController extends Controller
      */
     public function landingPage()
     {
-        // Mengambil 3 produk terbaru untuk section koleksi
-        $products = Product::with(['category'])->latest()->take(3)->get();
+        // Mengambil 3 produk terbaru yang HANYA BERSTATUS AKTIF untuk section koleksi
+        $products = Product::with(['category'])
+            ->where('is_active', true)
+            ->latest()
+            ->take(3)
+            ->get();
 
         return view('welcome', compact('products'));
     }
@@ -26,8 +30,11 @@ class HomeController extends Controller
      */
     public function index()
     {
-        // Mengambil data produk agar variabel $products tidak Undefined
-        $products = Product::with(['category'])->latest()->get();
+        // Mengambil data produk HANYA YANG BERSTATUS AKTIF agar variabel $products tidak Undefined
+        $products = Product::with(['category'])
+            ->where('is_active', true)
+            ->latest()
+            ->get();
 
         // PERBAIKAN: Memanggil RajaOngkirController secara langsung 
         // karena Service sudah dihapus

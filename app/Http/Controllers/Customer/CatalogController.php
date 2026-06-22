@@ -15,15 +15,15 @@ class CatalogController extends Controller
      */
     public function index(Request $request)
     {
-        // 1. Inisialisasi Query dengan Eager Loading agar data stok varian ikut terambil
-        $query = Product::with(['category', 'variants', 'images']);
+        // 1. Inisialisasi Query dengan Eager Loading dan HANYA TAMPILKAN PRODUK AKTIF
+        $query = Product::with(['category', 'variants', 'images'])->where('is_active', true);
 
-        // 2. Filter Pencarian (q)
+        // 2. Filter Pencarian (q) - Update: Lebih robust dengan strtolower
         if ($request->filled('q')) {
-            $search = $request->q;
+            $search = strtolower($request->q);
             $query->where(function($q) use ($search) {
-                $q->where('name', 'LIKE', "%{$search}%")
-                  ->orWhere('description', 'LIKE', "%{$search}%");
+                $q->whereRaw('LOWER(name) LIKE ?', ["%{$search}%"])
+                  ->orWhereRaw('LOWER(description) LIKE ?', ["%{$search}%"]);
             });
         }
 
@@ -66,13 +66,18 @@ class CatalogController extends Controller
     public function show(string $slug)
     {
         // Mengambil produk dengan relasi fresh untuk memastikan stok varian akurat
-        $product = Product::query()->where('slug', $slug)
+        // HANYA BISA DIAKSES JIKA PRODUK AKTIF (Mencegah akses lewat link langsung)
+        $product = Product::query()
+            ->where('slug', $slug)
+            ->where('is_active', true) 
             ->with(['category', 'variants', 'images'])
             ->firstOrFail();
 
-        // Mengambil produk terkait (You May Also Like) yang masih memiliki stok
-        $relatedProducts = Product::query()->where('category_id', $product->category_id)
+        // Mengambil produk terkait (You May Also Like) yang masih memiliki stok DAN AKTIF
+        $relatedProducts = Product::query()
+            ->where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
+            ->where('is_active', true) 
             ->where('stock', '>', 0) // Hanya tampilkan yang ada stoknya
             ->take(4)
             ->get();

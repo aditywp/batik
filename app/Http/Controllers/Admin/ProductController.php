@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 class ProductController extends Controller
 {
     /**
-     * Tampilkan daftar produk dengan fitur Pencarian, Filter Kategori, Koleksi, dan Status Stok.
+     * Tampilkan daftar produk dengan fitur Pencarian, Filter Kategori, Koleksi, Status Stok, dan Status Aktif.
      */
     public function index(Request $request)
     {
@@ -46,9 +46,14 @@ class ProductController extends Controller
             }
         }
 
+        // 6. Logika Filter Status (Aktif / Draft)
+        if ($request->filled('is_active')) {
+            $query->where('is_active', $request->is_active);
+        }
+
         $categories = Category::all();
 
-        // 6. Eksekusi Pagination (12 produk agar rapi di tampilan Grid kelipatan 4 kolom)
+        // 7. Eksekusi Pagination (12 produk agar rapi di tampilan Grid kelipatan 4 kolom)
         $products = $query->paginate(12)->withQueryString(); 
             
         return view('admin.products.index', compact('products', 'categories'));
@@ -260,6 +265,12 @@ class ProductController extends Controller
      */
     public function destroy(Product $product)
     {
+        // 1. CEK RIWAYAT PESANAN (Mencegah Error 1451)
+        if ($product->orderItems()->exists()) {
+            return back()->with('error', 'Gagal dihapus! Produk ini sudah tercatat dalam riwayat pesanan pelanggan. Silakan ubah status produk menjadi Tidak Aktif agar hilang dari katalog.');
+        }
+
+        // 2. Jika aman (belum pernah dibeli), hapus gambar fisik dari folder storage
         foreach ($product->images as $img) {
             Storage::disk('public')->delete($img->image_path);
         }
@@ -270,8 +281,21 @@ class ProductController extends Controller
             }
         }
 
-        $product->forceDelete();
-        return redirect()->route('admin.products.index')->with('success', 'Produk berhasil dihapus!');
+        // 3. Hapus produk dari database secara permanen
+        $product->delete();
+        
+        return redirect()->route('admin.products.index')->with('success', 'Produk berhasil dihapus secara permanen!');
+    }
+    
+    /**
+     * Ubah status Aktif / Nonaktif (Draft) Produk.
+     */
+    public function toggleStatus(Product $product)
+    {
+        $product->update(['is_active' => !$product->is_active]);
+        $status = $product->is_active ? 'diaktifkan' : 'dinonaktifkan (disembunyikan dari katalog)';
+        
+        return back()->with('success', "Status produk berhasil $status.");
     }
 
     /**

@@ -4,10 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-// Gunakan penamaan tunggal (PascalCase) agar konsisten
-use App\Models\Category; 
-use App\Models\ProductImage;
-use App\Models\ProductVariant;
 
 class Product extends Model
 {
@@ -26,12 +22,12 @@ class Product extends Model
         'image',
         'category_id',
         'collection',
+        'is_active', // <--- TAMBAHKAN BARIS INI
     ];
 
     // Relasi ke Category (Many to One)
     public function category()
     {
-        // Pastikan nama class-nya Category (tunggal), bukan categories
         return $this->belongsTo(Category::class);
     }
 
@@ -54,17 +50,19 @@ class Product extends Model
     }
 
     // Relasi ke OrderItem (One to Many)
+    // Berfungsi untuk mengecek apakah produk sudah pernah dibeli (mencegah error saat dihapus)
     public function orderItems()
     {
         return $this->hasMany(OrderItem::class);
     }
 
+    // Relasi ke Varian Produk (One to Many)
     public function variants()
     {
         return $this->hasMany(ProductVariant::class);
     }
 
-    // Helper untuk total stok otomatis
+    // Helper untuk menjumlahkan total stok otomatis dari seluruh varian
     public function getTotalStockAttribute()
     {
         return $this->variants->sum('stock');

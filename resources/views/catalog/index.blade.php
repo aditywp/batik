@@ -6,7 +6,6 @@
 <div class="bg-white min-h-screen pt-32 pb-20 text-black">
     <div class="max-w-7xl mx-auto px-6 lg:px-10">
         
-        <!-- Header & Search -->
         <div class="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
             <div>
                 <p class="text-[11px] text-gray-400 uppercase tracking-widest mb-2">Showing {{ $products->total() }} products</p>
@@ -29,11 +28,9 @@
         </div>
 
         <div class="flex flex-col lg:flex-row gap-16">
-            <!-- SIDEBAR FILTER -->
             <aside class="w-full lg:w-64 flex-shrink-0">
                 <div class="space-y-10">
                     
-                    <!-- Filter Categories -->
                     <div x-data="{ open: true }">
                         <button @click="open = !open" class="flex justify-between items-center w-full mb-6 uppercase tracking-[0.2em] text-[10px] font-black">
                             Category <span x-text="open ? '—' : '+'"></span>
@@ -56,7 +53,6 @@
                         </div>
                     </div>
 
-                    <!-- Filter Price Range (Slider Bar Style) -->
                     <div x-data="{ 
                         open: true, 
                         min: {{ request('min_price', 0) }}, 
@@ -88,7 +84,6 @@
                         </div>
                     </div>
 
-                    <!-- Filter Collections -->
                     <div x-data="{ open: true }">
                         <button @click="open = !open" class="flex justify-between items-center w-full mb-6 uppercase tracking-[0.2em] text-[10px] font-black">
                             Collections <span x-text="open ? '—' : '+'"></span>
@@ -114,7 +109,6 @@
                 </div>
             </aside>
 
-            <!-- PRODUCT GRID -->
             <main class="flex-grow">
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-16">
                     @forelse($products as $product)
@@ -124,7 +118,7 @@
                                      class="w-full h-full object-cover transition duration-700 group-hover:scale-105">
                             </a>
                             <div class="space-y-1">
-                                <p class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{{ $product->category->name }}</p>
+                                <p class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{{ $product->category->name ?? 'Uncategorized' }}</p>
                                 <h3 class="text-[11px] font-black uppercase tracking-widest">
                                     <a href="{{ route('catalog.show', $product->slug) }}">{{ $product->name }}</a>
                                 </h3>
@@ -138,9 +132,69 @@
                     @endforelse
                 </div>
 
-                <div class="mt-20">
-                    {{ $products->links() }}
+                <div class="mt-20 pt-6">
+                    @if ($products->hasPages())
+                        <div class="flex flex-col md:flex-row items-center justify-between gap-6 py-4 px-6 bg-white border border-gray-100 rounded-xl shadow-sm">
+                            
+                            <p class="text-[12px] font-medium text-gray-400 tracking-wider uppercase">
+                                Menampilkan <span class="text-gray-900 font-bold">{{ $products->firstItem() }}</span> - 
+                                <span class="text-gray-900 font-bold">{{ $products->lastItem() }}</span> 
+                                dari <span class="text-gray-900 font-bold">{{ $products->total() }}</span> produk
+                            </p>
+
+                            <div class="flex items-center gap-2">
+                                {{-- Tombol Previous --}}
+                                @if ($products->onFirstPage())
+                                    <span class="px-4 py-2 text-[12px] font-bold text-gray-300 bg-gray-100 rounded-lg cursor-not-allowed uppercase tracking-wider">
+                                        Prev
+                                    </span>
+                                @else
+                                    <a href="{{ $products->previousPageUrl() }}" class="px-4 py-2 text-[12px] font-bold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition duration-200 uppercase tracking-wider">
+                                        Prev
+                                    </a>
+                                @endif
+
+                                {{-- Logika untuk menampilkan maksimal 3 angka halaman saja --}}
+                                @php
+                                    $start = max(1, $products->currentPage() - 1);
+                                    $end = min($products->lastPage(), $start + 2);
+                                    
+                                    // Penyesuaian jika user berada di halaman-halaman terakhir agar tetap tampil 3 tombol (jika halamannya cukup)
+                                    if ($end - $start < 2) {
+                                        $start = max(1, $end - 2);
+                                    }
+                                @endphp
+
+                                @for ($i = $start; $i <= $end; $i++)
+                                    @if ($i == $products->currentPage())
+                                        {{-- Halaman Aktif (Gelap) --}}
+                                        <span class="px-4 py-2 text-[13px] font-bold text-white bg-[#1a1a2e] rounded-lg shadow-md">
+                                            {{ $i }}
+                                        </span>
+                                    @else
+                                        {{-- Halaman Tidak Aktif (Outline) --}}
+                                        <a href="{{ $products->url($i) }}" class="px-4 py-2 text-[13px] font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition duration-200">
+                                            {{ $i }}
+                                        </a>
+                                    @endif
+                                @endfor
+
+                                {{-- Tombol Next --}}
+                                @if ($products->hasMorePages())
+                                    <a href="{{ $products->nextPageUrl() }}" class="px-4 py-2 text-[12px] font-bold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition duration-200 uppercase tracking-wider">
+                                        Next
+                                    </a>
+                                @else
+                                    <span class="px-4 py-2 text-[12px] font-bold text-gray-300 bg-gray-100 rounded-lg cursor-not-allowed uppercase tracking-wider">
+                                        Next
+                                    </span>
+                                @endif
+                            </div>
+
+                        </div>
+                    @endif
                 </div>
+
             </main>
         </div>
     </div>
