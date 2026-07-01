@@ -139,8 +139,8 @@
                         </label>
                     </div>
 
-                    {{-- Button Submit --}}
-                    <div>
+                    {{-- Button Submit & Register Link --}}
+                    <div class="flex flex-col gap-4">
                         <button type="submit" 
                                 class="w-full bg-[#1a1a2e] text-[#e8c9a0] h-12 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-black hover:shadow-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#1a1a2e]/10">
                             <span>Masuk ke Dashboard</span>
@@ -148,6 +148,11 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7m0 0l-7 7m7-7H6"/>
                             </svg>
                         </button>
+
+                        {{-- Tautan ke Halaman Register --}}
+                        <a href="{{ route('register') }}" class="text-center text-xs font-black text-gray-400 hover:text-[#1a1a2e] uppercase tracking-wider transition-colors py-1">
+                            Belum Terdaftar? Daftar Sini
+                        </a>
                     </div>
                 </form>
 

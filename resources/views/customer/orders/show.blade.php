@@ -40,9 +40,11 @@
                     <div class="space-y-8">
                         @foreach($order->items as $item)
                             @php
-                                $imagePath = $item->variant->image_path 
-                                           ?? $item->product->variants->first()?->image_path 
-                                           ?? $item->product->images->first()?->image_path 
+                                // MENGGUNAKAN IMAGE SNAPSHOT TERLEBIH DAHULU
+                                $imagePath = $item->image_snapshot 
+                                           ?? $item->variant?->image_path 
+                                           ?? $item->product?->variants?->first()?->image_path 
+                                           ?? $item->product?->images?->first()?->image_path 
                                            ?? null;
                                 
                                 $userReview = \App\Models\Review::where('order_id', $order->id)
@@ -52,22 +54,21 @@
                             @endphp
                             <div class="flex flex-col pb-8 border-b border-gray-50 last:border-0 last:pb-0">
                                 <div class="flex gap-6">
-                                    <a href="{{ route('catalog.show', $item->product->slug) }}" class="w-24 h-32 flex-shrink-0 bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 shadow-sm block relative group/img">
+                                    {{-- GAMBAR STATIS (TIDAK ADA LINK) --}}
+                                    <div class="w-24 h-32 flex-shrink-0 bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 shadow-sm block relative">
                                         <img src="{{ $imagePath ? asset('storage/' . $imagePath) : asset('images/placeholder.jpg') }}" 
-                                             class="w-full h-full object-cover shadow-inner transition-transform duration-500 group-hover/img:scale-105">
-                                        <div class="absolute inset-0 bg-black/5 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                                            <span class="text-white text-[9px] font-black uppercase tracking-widest bg-black/60 px-2 py-1 rounded-md">View</span>
-                                        </div>
-                                    </a>
+                                             class="w-full h-full object-cover shadow-inner">
+                                    </div>
 
                                     <div class="flex-grow py-2 flex flex-col justify-between">
                                         <div>
-                                            <h4 class="text-base font-black uppercase tracking-tight text-black leading-tight hover:text-orange-600 transition-colors">
-                                                <a href="{{ route('catalog.show', $item->product->slug) }}">
-                                                    {{ $item->product->name }}
-                                                </a>
+                                            {{-- NAMA PRODUK SNAPSHOT: AMAN DARI HARD DELETE --}}
+                                            <h4 class="text-base font-black uppercase tracking-tight text-black leading-tight">
+                                                {{ $item->product_name_snapshot ?? ($item->product?->name ?? 'Produk Tidak Tersedia') }}
                                             </h4>
-                                            <p class="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-widest">{{ $item->product->collection ?? 'Batik Collection' }}</p>
+                                            <p class="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-widest">
+                                                {{ $item->product?->collection ?? 'Arsip' }}
+                                            </p>
                                             
                                             @if($item->variant)
                                                 <div class="mt-3">
@@ -78,8 +79,12 @@
                                             @endif
                                         </div>
                                         <div class="flex justify-between items-end">
-                                            <p class="text-xs font-bold text-gray-400 italic">{{ $item->quantity }} x Rp {{ number_format($item->price, 0, ',', '.') }}</p>
-                                            <p class="text-sm font-black text-black italic">Rp {{ number_format($item->price * $item->quantity, 0, ',', '.') }}</p>
+                                            {{-- HARGA MENGGUNAKAN PRICE SNAPSHOT --}}
+                                            @php
+                                                $usedPrice = $item->price_snapshot ?? $item->price;
+                                            @endphp
+                                            <p class="text-xs font-bold text-gray-400 italic">{{ $item->quantity }} x Rp {{ number_format($usedPrice, 0, ',', '.') }}</p>
+                                            <p class="text-sm font-black text-black italic">Rp {{ number_format($usedPrice * $item->quantity, 0, ',', '.') }}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -202,7 +207,7 @@
                         </div>
                     </div>
 
-                    {{-- MODIFIKASI GERBANG TOMBOL AKSI PEMBAYARAN & PEMBATALAN AKTIF --}}
+                    {{-- TOMBOL AKSI PEMBAYARAN & PEMBATALAN AKTIF --}}
                     @if($order->payment_status == 'unpaid' || $order->payment_status == 'pending')
                         <div class="space-y-3 mt-10 relative z-10">
                             <button id="pay-button" class="w-full bg-black text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-[3px] hover:bg-orange-500 transition-all shadow-xl active:scale-95">

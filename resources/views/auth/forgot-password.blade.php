@@ -38,7 +38,6 @@
 
             {{-- Bagian Atas Sisi Kiri --}}
             <div class="relative z-20">
-                <span class="text-xs font-black uppercase tracking-[0.3em] text-[#e8c9a0] bg-[#e8c9a0]/10 px-3 py-1.5 rounded-lg border border-[#e8c9a0]/20">Keamanan Sistem</span>
                 <h2 class="text-3xl font-black text-white italic mt-6 uppercase tracking-tight">Batik Ifawati</h2>
             </div>
 
@@ -59,7 +58,7 @@
                 
                 {{-- Judul & Informasi Penjelas UX --}}
                 <div class="mb-6">
-                    <h3 class="text-2xl font-black text-[#1a1a2e] tracking-tight uppercase italic">Pulihkan Sandi</h3>
+                    <h3 class="text-2xl font-black text-[#1a1a2e] tracking-tight uppercase italic">Reset Sandi</h3>
                     <p class="text-gray-500 text-xs mt-2.5 leading-relaxed font-medium">
                         Jangan khawatir! Masukkan alamat email terdaftar Anda di bawah ini, dan sistem otentikasi kami akan mengirimkan tautan pemulihan kata sandi baru secara instan.
                     </p>

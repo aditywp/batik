@@ -102,24 +102,16 @@
 
     {{-- PHILOSOPHY SECTION --}}
     <section class="py-20 md:py-32 bg-black border-t border-white/5">
-        <div class="max-w-7xl mx-auto px-6 md:px-10 flex flex-col lg:flex-row items-center gap-12 md:gap-20">
-            <div class="lg:w-1/2">
-                <h2 class="text-2xl md:text-3xl font-playfair italic mb-8 leading-snug text-white">
-                    "Batik is an art fused with soul. <br>
+        <div class="max-w-4xl mx-auto px-6 md:px-10 flex flex-col items-center justify-center text-center">
+            <div class="w-full">
+                <h2 class="text-2xl md:text-3xl lg:text-4xl font-playfair italic mb-8 leading-relaxed text-white">
+                    "Batik is an art fused with soul. <br class="hidden md:block">
                     In Ifawati, we believe that each pattern 
                     is there to make you adored, loved and remembered."
                 </h2>
                 <a href="{{ route('philosophy') }}" class="inline-block text-[10px] uppercase tracking-[0.3em] border-b border-white/40 pb-2 hover:border-white transition">
                     See our stories
                 </a>
-            </div>
-            <div class="lg:w-1/2 grid grid-cols-2 gap-4 md:gap-6 text-white w-full">
-                <div class="overflow-hidden">
-                    <img src="https://images.unsplash.com/photo-1615484477778-ca3b77940c25?auto=format&fit=crop&q=80" class="w-full h-64 md:h-80 object-cover transition duration-700 hover:scale-110">
-                </div>
-                <div class="overflow-hidden mt-8 md:mt-12">
-                    <img src="https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&q=80" class="w-full h-64 md:h-80 object-cover transition duration-700 hover:scale-110">
-                </div>
             </div>
         </div>
     </section>

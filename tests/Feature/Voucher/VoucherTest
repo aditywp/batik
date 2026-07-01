@@ -1,0 +1,399 @@
+<?php
+
+namespace Tests\Feature\Voucher;
+
+use App\Models\User;
+use App\Models\Voucher;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+/**
+ * ============================================================
+ * VoucherTest — Pengujian Modul Voucher
+ * ============================================================
+ * Cakupan:
+ *  - Admin: Create, Update, Delete, Search/Filter
+ *  - Customer: Redeem (tukar poin dengan voucher)
+ *
+ * Jalankan: php artisan test --filter=VoucherTest
+ * ============================================================
+ */
+class VoucherTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $admin;
+    private User $customer;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->admin    = User::factory()->create(['role' => 'admin',    'email_verified_at' => now()]);
+        $this->customer = User::factory()->create(['role' => 'customer', 'email_verified_at' => now(), 'points' => 200]);
+    }
+
+    // ─── HELPERS ─────────────────────────────────────────────
+
+    private function makeVoucher(array $attrs = []): Voucher
+    {
+        return Voucher::create(array_merge([
+            'name'               => 'Voucher Test',
+            'code'               => 'VTEST' . uniqid(),
+            'discount_amount'    => 15000,
+            'points_required'    => 100,
+            'is_welcome_voucher' => false,
+            'is_active'          => true,
+            'valid_until'        => now()->addYear()->toDateString(),
+        ], $attrs));
+    }
+
+    private function validStorePayload(array $overrides = []): array
+    {
+        return array_merge([
+            'name'            => 'Diskon Lebaran',
+            'code'            => 'LEBARAN25',
+            'discount_amount' => 25000,
+            'points_required' => 50,
+            'valid_until'     => now()->addMonths(3)->toDateString(),
+            'is_active'       => '1',
+        ], $overrides);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  ADMIN – INDEX
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function admin_dapat_melihat_halaman_daftar_voucher()
+    {
+        $this->actingAs($this->admin)
+             ->get(route('admin.vouchers.index'))
+             ->assertStatus(200)
+             ->assertViewIs('admin.vouchers.index');
+    }
+
+    /** @test */
+    public function tamu_tidak_dapat_akses_halaman_voucher_admin()
+    {
+        $this->get(route('admin.vouchers.index'))
+             ->assertRedirect(route('login'));
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  ADMIN – CREATE (STORE)
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_admin_dapat_tambah_voucher_baru()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.vouchers.store'), $this->validStorePayload())
+             ->assertRedirect(route('admin.vouchers.index'))
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('vouchers', [
+            'name' => 'Diskon Lebaran',
+            'code' => 'LEBARAN25', // harus uppercase
+        ]);
+    }
+
+    /** @test */
+    public function ep_valid_kode_voucher_otomatis_dikonversi_ke_uppercase()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.vouchers.store'), $this->validStorePayload(['code' => 'lebaran25']));
+
+        $this->assertDatabaseHas('vouchers', ['code' => 'LEBARAN25']);
+    }
+
+    /** @test */
+    public function ep_invalid_tambah_voucher_gagal_nama_kosong()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.vouchers.store'), $this->validStorePayload(['name' => '']))
+             ->assertSessionHasErrors('name');
+    }
+
+    /** @test */
+    public function ep_invalid_tambah_voucher_gagal_kode_duplikat()
+    {
+        $this->makeVoucher(['code' => 'DUPLIKAT10']);
+
+        $this->actingAs($this->admin)
+             ->post(route('admin.vouchers.store'), $this->validStorePayload(['code' => 'DUPLIKAT10']))
+             ->assertSessionHasErrors('code');
+    }
+
+    /** @test */
+    public function ep_invalid_tambah_voucher_gagal_kode_mengandung_spasi()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.vouchers.store'), $this->validStorePayload(['code' => 'KODE SPASI']))
+             ->assertSessionHasErrors('code');
+    }
+
+    /** @test */
+    public function bva_tambah_voucher_berhasil_kode_tepat_3_karakter_batas_minimum()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.vouchers.store'), $this->validStorePayload(['code' => 'ABC']))
+             ->assertSessionDoesntHaveErrors('code');
+
+        $this->assertDatabaseHas('vouchers', ['code' => 'ABC']);
+    }
+
+    /** @test */
+    public function bva_tambah_voucher_gagal_kode_2_karakter_di_bawah_minimum()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.vouchers.store'), $this->validStorePayload(['code' => 'AB']))
+             ->assertSessionHasErrors('code');
+    }
+
+    /** @test */
+    public function bva_tambah_voucher_berhasil_diskon_rp9999999_batas_maksimum()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.vouchers.store'), $this->validStorePayload([
+                 'code'            => 'MAXDISKON',
+                 'discount_amount' => 9999999,
+             ]))
+             ->assertSessionDoesntHaveErrors('discount_amount');
+    }
+
+    /** @test */
+    public function bva_tambah_voucher_gagal_diskon_melebihi_9999999()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.vouchers.store'), $this->validStorePayload([
+                 'code'            => 'OVRDISKON',
+                 'discount_amount' => 10000000,
+             ]))
+             ->assertSessionHasErrors('discount_amount');
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  ADMIN – UPDATE
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_admin_dapat_mengedit_voucher()
+    {
+        $voucher = $this->makeVoucher(['code' => 'LAMAKODE']);
+
+        $this->actingAs($this->admin)
+             ->put(route('admin.vouchers.update', $voucher), $this->validStorePayload([
+                 'code' => 'BARUKODE',
+                 'name' => 'Voucher Sudah Diedit',
+             ]))
+             ->assertRedirect(route('admin.vouchers.index'))
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('vouchers', ['id' => $voucher->id, 'name' => 'Voucher Sudah Diedit', 'code' => 'BARUKODE']);
+    }
+
+    /** @test */
+    public function ep_invalid_edit_voucher_gagal_kode_duplikat_voucher_lain()
+    {
+        $this->makeVoucher(['code' => 'KODAA']);
+        $voucher = $this->makeVoucher(['code' => 'KODBB']);
+
+        $this->actingAs($this->admin)
+             ->put(route('admin.vouchers.update', $voucher), $this->validStorePayload(['code' => 'KODAA']))
+             ->assertSessionHasErrors('code');
+    }
+
+    /** @test */
+    public function ep_valid_edit_voucher_dengan_kode_sama_tidak_error_unique()
+    {
+        $voucher = $this->makeVoucher(['code' => 'SAMACODE']);
+
+        $this->actingAs($this->admin)
+             ->put(route('admin.vouchers.update', $voucher), $this->validStorePayload(['code' => 'SAMACODE']))
+             ->assertSessionDoesntHaveErrors('code');
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  ADMIN – DELETE
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_admin_dapat_menghapus_voucher()
+    {
+        $voucher = $this->makeVoucher();
+
+        $this->actingAs($this->admin)
+             ->delete(route('admin.vouchers.destroy', $voucher))
+             ->assertRedirect(route('admin.vouchers.index'))
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('vouchers', ['id' => $voucher->id]);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  ADMIN – SEARCH & FILTER
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_pencarian_voucher_berdasarkan_nama()
+    {
+        $this->makeVoucher(['name' => 'Voucher Lebaran', 'code' => 'VL1']);
+        $this->makeVoucher(['name' => 'Voucher Natal',   'code' => 'VN1']);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.vouchers.index', ['search' => 'Lebaran']));
+
+        $response->assertStatus(200)->assertSee('Voucher Lebaran');
+    }
+
+    /** @test */
+    public function ep_valid_pencarian_voucher_berdasarkan_kode()
+    {
+        $this->makeVoucher(['name' => 'A', 'code' => 'CARIKOV']);
+        $this->makeVoucher(['name' => 'B', 'code' => 'LAINKOV']);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.vouchers.index', ['search' => 'CARIKOV']));
+
+        $response->assertStatus(200)->assertSee('CARIKOV');
+    }
+
+    /** @test */
+    public function ep_valid_filter_voucher_status_active()
+    {
+        $aktif     = $this->makeVoucher(['code' => 'AKT', 'is_active' => true,  'valid_until' => now()->addYear()->toDateString()]);
+        $kadaluarsa = $this->makeVoucher(['code' => 'EXP', 'is_active' => true,  'valid_until' => now()->subDay()->toDateString()]);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.vouchers.index', ['status' => 'active']));
+
+        $response->assertStatus(200)->assertSee($aktif->code);
+    }
+
+    /** @test */
+    public function ep_valid_filter_voucher_status_expired()
+    {
+        $this->makeVoucher(['code' => 'AKTIF', 'is_active' => true, 'valid_until' => now()->addYear()->toDateString()]);
+        $kadaluarsa = $this->makeVoucher(['code' => 'KADDR', 'is_active' => true, 'valid_until' => now()->subDay()->toDateString()]);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.vouchers.index', ['status' => 'expired']));
+
+        $response->assertStatus(200)->assertSee($kadaluarsa->code);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  CUSTOMER – REDEEM (TUKAR POIN)
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function customer_dapat_melihat_halaman_voucher()
+    {
+        $this->actingAs($this->customer)
+             ->get(route('customer.vouchers.index'))
+             ->assertStatus(200)
+             ->assertViewIs('customer.vouchers.index');
+    }
+
+    /** @test */
+    public function ep_valid_customer_dapat_tukar_poin_dengan_voucher()
+    {
+        // Customer punya 200 poin, voucher butuh 100 poin
+        $voucher = $this->makeVoucher(['points_required' => 100]);
+
+        $this->actingAs($this->customer)
+             ->post(route('customer.vouchers.redeem', $voucher))
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        // Poin berkurang
+        $this->assertDatabaseHas('users', ['id' => $this->customer->id, 'points' => 100]);
+
+        // Voucher masuk dompet
+        $this->assertDatabaseHas('user_vouchers', [
+            'user_id'    => $this->customer->id,
+            'voucher_id' => $voucher->id,
+            'is_used'    => false,
+        ]);
+    }
+
+    /** @test */
+    public function ep_invalid_redeem_gagal_poin_tidak_cukup()
+    {
+        // Customer punya 200 poin, voucher butuh 500 poin
+        $voucher = $this->makeVoucher(['points_required' => 500]);
+
+        $this->actingAs($this->customer)
+             ->post(route('customer.vouchers.redeem', $voucher))
+             ->assertRedirect()
+             ->assertSessionHas('error');
+
+        // Poin tidak berubah
+        $this->assertDatabaseHas('users', ['id' => $this->customer->id, 'points' => 200]);
+    }
+
+    /** @test */
+    public function ep_invalid_redeem_gagal_voucher_sudah_ada_di_dompet_belum_terpakai()
+    {
+        $voucher = $this->makeVoucher(['points_required' => 50]);
+
+        // Pasang dulu ke dompet customer, belum dipakai
+        DB::table('user_vouchers')->insert([
+            'user_id'    => $this->customer->id,
+            'voucher_id' => $voucher->id,
+            'is_used'    => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($this->customer)
+             ->post(route('customer.vouchers.redeem', $voucher))
+             ->assertRedirect()
+             ->assertSessionHas('error');
+    }
+
+    /** @test */
+    public function ep_invalid_redeem_gagal_voucher_sudah_kadaluarsa()
+    {
+        $voucher = $this->makeVoucher([
+            'points_required' => 50,
+            'valid_until'     => now()->subDay()->toDateString(), // kemarin = kadaluarsa
+        ]);
+
+        $this->actingAs($this->customer)
+             ->post(route('customer.vouchers.redeem', $voucher))
+             ->assertRedirect()
+             ->assertSessionHas('error');
+    }
+
+    /** @test */
+    public function ep_invalid_redeem_gagal_voucher_tidak_aktif()
+    {
+        $voucher = $this->makeVoucher([
+            'points_required' => 50,
+            'is_active'       => false,
+        ]);
+
+        $this->actingAs($this->customer)
+             ->post(route('customer.vouchers.redeem', $voucher))
+             ->assertRedirect()
+             ->assertSessionHas('error');
+    }
+
+    /** @test */
+    public function ep_valid_redeem_berhasil_customer_dengan_poin_tepat_sama()
+    {
+        // Customer punya 200 poin, voucher tepat butuh 200 poin (batas bawah)
+        $voucher = $this->makeVoucher(['points_required' => 200]);
+
+        $this->actingAs($this->customer)
+             ->post(route('customer.vouchers.redeem', $voucher))
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('users', ['id' => $this->customer->id, 'points' => 0]);
+    }
+}

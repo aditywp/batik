@@ -20,7 +20,8 @@
     </div>
 @endif
 
-<form action="{{ route('auth.login.post') }}" method="POST" class="space-y-4">
+{{-- PERBAIKAN: route action diubah menjadi 'login' --}}
+<form action="{{ route('login') }}" method="POST" class="space-y-4">
     @csrf
 
     {{-- Email --}}
@@ -92,7 +93,8 @@
 
 <p class="mt-6 text-center text-sm text-stone-400">
     Belum punya akun?
-    <a href="{{ route('auth.register') }}"
+    {{-- PERBAIKAN: route diubah menjadi 'register' --}}
+    <a href="{{ route('register') }}"
        class="font-medium text-stone-900 hover:underline">
         Daftar sekarang
     </a>

@@ -1,0 +1,292 @@
+<?php
+
+namespace Tests\Feature\Review;
+
+use App\Models\Category;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\Review;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+/**
+ * ============================================================
+ * ReviewTest — Pengujian Modul Ulasan Produk
+ * ============================================================
+ * Cakupan:
+ *  - Customer: Store ulasan (EP Valid/Invalid, BVA)
+ *  - Admin: Moderasi ulasan (approve, destroy)
+ *
+ * Jalankan: php artisan test --filter=ReviewTest
+ * ============================================================
+ */
+class ReviewTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User           $customer;
+    private User           $admin;
+    private Product        $product;
+    private Order          $order;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->customer = User::factory()->create([
+            'role' => 'customer', 'email_verified_at' => now(), 'points' => 0,
+        ]);
+        $this->admin = User::factory()->create([
+            'role' => 'admin', 'email_verified_at' => now(),
+        ]);
+
+        $cat = Category::create(['name' => 'Batik', 'slug' => 'batik']);
+        $this->product = Product::create([
+            'name' => 'Batik Review', 'slug' => 'batik-review', 'description' => 'Desc',
+            'price' => 100000, 'stock' => 10, 'category_id' => $cat->id, 'collection' => 'Women',
+        ]);
+        $variant = ProductVariant::create([
+            'product_id' => $this->product->id, 'motif' => 'A', 'size' => 'M', 'stock' => 5,
+        ]);
+
+        // Order dengan status 'delivered' agar bisa di-review
+        $this->order = Order::create([
+            'user_id' => $this->customer->id, 'order_code' => 'BI-REV-001',
+            'subtotal' => 100000, 'shipping_cost' => 10000, 'total' => 110000,
+            'status' => 'delivered', 'payment_status' => 'paid',
+            'shipping_address' => 'Jl. Test', 'courier' => 'jne', 'courier_service' => 'REG',
+        ]);
+        OrderItem::create([
+            'order_id' => $this->order->id, 'product_id' => $this->product->id,
+            'variant_id' => $variant->id, 'quantity' => 1, 'price' => 100000, 'subtotal' => 100000,
+        ]);
+    }
+
+    // ─── HELPERS ─────────────────────────────────────────────
+
+    private function validPayload(array $overrides = []): array
+    {
+        return array_merge([
+            'order_id'   => $this->order->id,
+            'product_id' => $this->product->id,
+            'rating'     => 5,
+            'comment'    => 'Batiknya bagus sekali dan kualitas terjamin!',
+        ], $overrides);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  CUSTOMER – STORE ULASAN (EP VALID)
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_customer_dapat_memberikan_ulasan_pada_pesanan_delivered()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.reviews.store'), $this->validPayload())
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('reviews', [
+            'user_id'    => $this->customer->id,
+            'product_id' => $this->product->id,
+            'order_id'   => $this->order->id,
+            'rating'     => 5,
+        ]);
+    }
+
+    /** @test */
+    public function bva_rating_1_bintang_minimum_berhasil_disimpan()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.reviews.store'), $this->validPayload(['rating' => 1]))
+             ->assertSessionDoesntHaveErrors('rating');
+
+        $this->assertDatabaseHas('reviews', ['rating' => 1]);
+    }
+
+    /** @test */
+    public function bva_rating_5_bintang_maksimum_berhasil_disimpan()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.reviews.store'), $this->validPayload(['rating' => 5]))
+             ->assertSessionDoesntHaveErrors('rating');
+
+        $this->assertDatabaseHas('reviews', ['rating' => 5]);
+    }
+
+    /** @test */
+    public function bva_komentar_tepat_5_karakter_batas_minimum_berhasil()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.reviews.store'), $this->validPayload(['comment' => 'Bagus']))
+             ->assertSessionDoesntHaveErrors('comment');
+    }
+
+    /** @test */
+    public function bva_komentar_4_karakter_di_bawah_minimum_gagal()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.reviews.store'), $this->validPayload(['comment' => 'Oke.']))
+             ->assertSessionHasErrors('comment');
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  CUSTOMER – STORE ULASAN (EP INVALID)
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function bva_rating_0_di_bawah_minimum_gagal()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.reviews.store'), $this->validPayload(['rating' => 0]))
+             ->assertSessionHasErrors('rating');
+    }
+
+    /** @test */
+    public function bva_rating_6_di_atas_maksimum_gagal()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.reviews.store'), $this->validPayload(['rating' => 6]))
+             ->assertSessionHasErrors('rating');
+    }
+
+    /** @test */
+    public function ep_invalid_ulasan_gagal_jika_sudah_pernah_review_produk_sama()
+    {
+        Review::create([
+            'user_id'     => $this->customer->id,
+            'product_id'  => $this->product->id,
+            'order_id'    => $this->order->id,
+            'rating'      => 4,
+            'comment'     => 'Review pertama sudah ada.',
+            'is_approved' => true,
+        ]);
+
+        $this->actingAs($this->customer)
+             ->post(route('customer.reviews.store'), $this->validPayload())
+             ->assertRedirect()
+             ->assertSessionHas('error');
+
+        // Hanya boleh ada 1 review
+        $this->assertDatabaseCount('reviews', 1);
+    }
+
+    /** @test */
+    public function ep_invalid_ulasan_gagal_pada_pesanan_belum_delivered()
+    {
+        $orderProcessing = Order::create([
+            'user_id' => $this->customer->id, 'order_code' => 'BI-PROC-001',
+            'subtotal' => 100000, 'shipping_cost' => 10000, 'total' => 110000,
+            'status' => 'processing', 'payment_status' => 'paid',
+            'shipping_address' => 'Jl. Test', 'courier' => 'jne', 'courier_service' => 'REG',
+        ]);
+        OrderItem::create([
+            'order_id' => $orderProcessing->id, 'product_id' => $this->product->id,
+            'variant_id' => null, 'quantity' => 1, 'price' => 100000, 'subtotal' => 100000,
+        ]);
+
+        $this->actingAs($this->customer)
+             ->post(route('customer.reviews.store'), $this->validPayload(['order_id' => $orderProcessing->id]))
+             ->assertStatus(404); // firstOrFail() lempar 404
+    }
+
+    /** @test */
+    public function ep_invalid_ulasan_gagal_order_tidak_ada_di_database()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.reviews.store'), $this->validPayload(['order_id' => 9999]))
+             ->assertSessionHasErrors('order_id');
+    }
+
+    /** @test */
+    public function ep_invalid_ulasan_gagal_product_tidak_ada_di_database()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.reviews.store'), $this->validPayload(['product_id' => 9999]))
+             ->assertSessionHasErrors('product_id');
+    }
+
+    /** @test */
+    public function ep_invalid_tamu_tidak_dapat_kirim_ulasan()
+    {
+        $this->post(route('customer.reviews.store'), $this->validPayload())
+             ->assertRedirect(route('login'));
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  ADMIN – MODERASI ULASAN
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function admin_dapat_melihat_daftar_ulasan()
+    {
+        $this->actingAs($this->admin)
+             ->get(route('admin.reviews.index'))
+             ->assertStatus(200)
+             ->assertViewIs('admin.reviews.index');
+    }
+
+    /** @test */
+    public function ep_valid_admin_dapat_menghapus_ulasan()
+    {
+        $review = Review::create([
+            'user_id'     => $this->customer->id,
+            'product_id'  => $this->product->id,
+            'order_id'    => $this->order->id,
+            'rating'      => 3,
+            'comment'     => 'Ulasan yang akan dihapus oleh admin.',
+            'is_approved' => true,
+        ]);
+
+        $this->actingAs($this->admin)
+             ->delete(route('admin.reviews.destroy', $review))
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('reviews', ['id' => $review->id]);
+    }
+
+    /** @test */
+    public function ep_valid_admin_dapat_menyetujui_ulasan()
+    {
+        $review = Review::create([
+            'user_id'     => $this->customer->id,
+            'product_id'  => $this->product->id,
+            'order_id'    => $this->order->id,
+            'rating'      => 4,
+            'comment'     => 'Ulasan menunggu moderasi admin.',
+            'is_approved' => false,
+        ]);
+
+        $this->actingAs($this->admin)
+             ->patch(route('admin.reviews.approve', $review))
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('reviews', ['id' => $review->id, 'is_approved' => true]);
+    }
+
+    /** @test */
+    public function ep_valid_filter_ulasan_berdasarkan_rating()
+    {
+        Review::create([
+            'user_id' => $this->customer->id, 'product_id' => $this->product->id,
+            'order_id' => $this->order->id, 'rating' => 5, 'comment' => 'Rating 5 bintang!', 'is_approved' => true,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.reviews.index', ['rating' => 5]));
+
+        $response->assertStatus(200)->assertSee('Rating 5 bintang!');
+    }
+
+    /** @test */
+    public function ep_invalid_customer_tidak_dapat_akses_halaman_ulasan_admin()
+    {
+        $response = $this->actingAs($this->customer)->get(route('admin.reviews.index'));
+        $this->assertTrue(in_array($response->getStatusCode(), [302, 403]));
+    }
+}

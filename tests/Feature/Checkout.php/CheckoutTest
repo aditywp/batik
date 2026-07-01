@@ -1,0 +1,406 @@
+<?php
+
+namespace Tests\Feature\Checkout;
+
+use App\Models\CartItem;
+use App\Models\Category;
+use App\Models\Order;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\User;
+use App\Models\Voucher;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+/**
+ * ============================================================
+ * CheckoutTest — Pengujian Modul Checkout & Pembayaran
+ * ============================================================
+ * Cakupan:
+ *  - Akses halaman checkout (kosong / berisi)
+ *  - Validasi field checkout
+ *  - Proses order tanpa voucher (JSON response)
+ *  - Order gratis via voucher (bypass Midtrans)
+ *  - Stok berkurang & keranjang dikosongkan
+ *  - Halaman finish
+ *
+ * Jalankan: php artisan test --filter=CheckoutTest
+ * ============================================================
+ */
+class CheckoutTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User           $customer;
+    private Product        $product;
+    private ProductVariant $variant;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->customer = User::factory()->create([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ]);
+
+        $category = Category::create(['name' => 'Batik', 'slug' => 'batik']);
+
+        $this->product = Product::create([
+            'name'        => 'Batik Checkout',
+            'slug'        => 'batik-checkout',
+            'description' => 'Produk untuk test checkout',
+            'price'       => 150000,
+            'stock'       => 20,
+            'category_id' => $category->id,
+            'collection'  => 'Women',
+            'is_active'   => true,
+        ]);
+
+        $this->variant = ProductVariant::create([
+            'product_id' => $this->product->id,
+            'motif'      => 'Motif Biru',
+            'size'       => 'M',
+            'stock'      => 10,
+            'price'      => null,
+        ]);
+    }
+
+    // ─── HELPERS ─────────────────────────────────────────────
+
+    private function addToCart(int $qty = 1): void
+    {
+        CartItem::create([
+            'user_id'    => $this->customer->id,
+            'product_id' => $this->product->id,
+            'variant_id' => $this->variant->id,
+            'quantity'   => $qty,
+        ]);
+    }
+
+    private function makeVoucher(int $discount = 20000, int $points = 0): Voucher
+    {
+        return Voucher::create([
+            'name'               => 'Voucher Test',
+            'code'               => 'TEST' . uniqid(),
+            'discount_amount'    => $discount,
+            'points_required'    => $points,
+            'is_welcome_voucher' => false,
+            'is_active'          => true,
+            'valid_until'        => now()->addYear()->toDateString(),
+        ]);
+    }
+
+    private function attachVoucherToUser(Voucher $voucher): int
+    {
+        return DB::table('user_vouchers')->insertGetId([
+            'user_id'    => $this->customer->id,
+            'voucher_id' => $voucher->id,
+            'is_used'    => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function validCheckoutPayload(array $overrides = []): array
+    {
+        return array_merge([
+            'shipping_address' => 'Jl. Test Checkout No. 99, Sidoarjo',
+            'courier'          => 'jne',
+            'courier_service'  => 'REG',
+            'shipping_cost'    => 15000,
+            'user_voucher_id'  => null,
+        ], $overrides);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  HALAMAN CHECKOUT
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_halaman_checkout_tampil_dengan_keranjang_berisi()
+    {
+        $this->addToCart(2);
+
+        $this->actingAs($this->customer)
+             ->get(route('customer.checkout.index'))
+             ->assertStatus(200)
+             ->assertViewIs('customer.checkout.index');
+    }
+
+    /** @test */
+    public function ep_invalid_redirect_ke_cart_jika_keranjang_kosong()
+    {
+        // Tidak menambah item ke keranjang
+        $this->actingAs($this->customer)
+             ->get(route('customer.checkout.index'))
+             ->assertRedirect(route('customer.cart.index'))
+             ->assertSessionHas('error');
+    }
+
+    /** @test */
+    public function tamu_tidak_dapat_akses_halaman_checkout()
+    {
+        $this->get(route('customer.checkout.index'))
+             ->assertRedirect(route('login'));
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  PROSES CHECKOUT — VALIDASI FIELD
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_invalid_checkout_gagal_shipping_address_kosong()
+    {
+        $this->addToCart();
+
+        $this->actingAs($this->customer)
+             ->postJson(route('customer.checkout.process'),
+                 $this->validCheckoutPayload(['shipping_address' => '']))
+             ->assertJsonValidationErrors('shipping_address');
+    }
+
+    /** @test */
+    public function bva_checkout_berhasil_shipping_address_500_karakter_batas_maksimum()
+    {
+        $this->addToCart();
+
+        $this->actingAs($this->customer)
+             ->postJson(route('customer.checkout.process'),
+                 $this->validCheckoutPayload(['shipping_address' => str_repeat('A', 500)]))
+             ->assertJsonMissingValidationErrors('shipping_address');
+    }
+
+    /** @test */
+    public function bva_checkout_gagal_shipping_address_501_karakter_melampaui_batas()
+    {
+        $this->addToCart();
+
+        $this->actingAs($this->customer)
+             ->postJson(route('customer.checkout.process'),
+                 $this->validCheckoutPayload(['shipping_address' => str_repeat('A', 501)]))
+             ->assertJsonValidationErrors('shipping_address');
+    }
+
+    /** @test */
+    public function ep_invalid_checkout_gagal_courier_kosong()
+    {
+        $this->addToCart();
+
+        $this->actingAs($this->customer)
+             ->postJson(route('customer.checkout.process'),
+                 $this->validCheckoutPayload(['courier' => '']))
+             ->assertJsonValidationErrors('courier');
+    }
+
+    /** @test */
+    public function ep_invalid_checkout_gagal_shipping_cost_negatif()
+    {
+        $this->addToCart();
+
+        $this->actingAs($this->customer)
+             ->postJson(route('customer.checkout.process'),
+                 $this->validCheckoutPayload(['shipping_cost' => -1]))
+             ->assertJsonValidationErrors('shipping_cost');
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  PROSES CHECKOUT — TANPA VOUCHER
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_checkout_berhasil_tanpa_voucher_order_dibuat()
+    {
+        $this->addToCart(2);
+        $stokAwal = $this->variant->stock; // 10
+
+        // Mock MidtransService agar tidak benar-benar hit API Midtrans
+        $this->mock(\App\Services\MidtransService::class, function ($mock) {
+            $mock->shouldReceive('createSnapToken')->once()->andReturn('snap-token-dummy-123');
+        });
+
+        $response = $this->actingAs($this->customer)
+                         ->postJson(route('customer.checkout.process'),
+                             $this->validCheckoutPayload());
+
+        $response->assertStatus(200)
+                 ->assertJson([
+                     'is_free'    => false,
+                     'snap_token' => 'snap-token-dummy-123',
+                 ]);
+
+        // Order tersimpan di database
+        $this->assertDatabaseHas('orders', [
+            'user_id'        => $this->customer->id,
+            'status'         => 'pending',
+            'payment_status' => 'unpaid',
+            'shipping_cost'  => 15000,
+            'total'          => (150000 * 2) + 15000, // subtotal + ongkir
+        ]);
+
+        // Keranjang kosong setelah checkout
+        $this->assertDatabaseCount('cart_items', 0);
+
+        // Stok berkurang
+        $this->assertDatabaseHas('product_variants', [
+            'id'    => $this->variant->id,
+            'stock' => $stokAwal - 2,
+        ]);
+    }
+
+    /** @test */
+    public function ep_valid_checkout_dengan_voucher_diskon_parsial()
+    {
+        $this->addToCart(1); // subtotal 150000
+        $voucher    = $this->makeVoucher(20000);
+        $uvId       = $this->attachVoucherToUser($voucher);
+
+        $this->mock(\App\Services\MidtransService::class, function ($mock) {
+            $mock->shouldReceive('createSnapToken')->once()->andReturn('snap-token-diskon');
+        });
+
+        $response = $this->actingAs($this->customer)
+                         ->postJson(route('customer.checkout.process'),
+                             $this->validCheckoutPayload(['user_voucher_id' => $uvId]));
+
+        $response->assertStatus(200)
+                 ->assertJson(['is_free' => false]);
+
+        // Total = 150000 + 15000 - 20000 = 145000
+        $this->assertDatabaseHas('orders', [
+            'user_id' => $this->customer->id,
+            'total'   => 145000,
+        ]);
+
+        // Voucher ditandai is_used = true
+        $this->assertDatabaseHas('user_vouchers', [
+            'id'      => $uvId,
+            'is_used' => true,
+        ]);
+    }
+
+    /** @test */
+    public function ep_valid_checkout_gratis_via_voucher_bypass_midtrans()
+    {
+        $this->addToCart(1); // subtotal 150000
+        // Voucher senilai Rp 200000 - melebihi total (150000 + 15000 = 165000)
+        $voucher = $this->makeVoucher(200000);
+        $uvId    = $this->attachVoucherToUser($voucher);
+
+        // MidtransService TIDAK boleh dipanggil sama sekali untuk pesanan gratis
+        $this->mock(\App\Services\MidtransService::class, function ($mock) {
+            $mock->shouldNotReceive('createSnapToken');
+        });
+
+        $response = $this->actingAs($this->customer)
+                         ->postJson(route('customer.checkout.process'),
+                             $this->validCheckoutPayload(['user_voucher_id' => $uvId]));
+
+        $response->assertStatus(200)
+                 ->assertJson(['is_free' => true]);
+
+        // Order langsung berstatus processing & paid
+        $this->assertDatabaseHas('orders', [
+            'user_id'        => $this->customer->id,
+            'total'          => 0,
+            'status'         => 'processing',
+            'payment_status' => 'paid',
+        ]);
+    }
+
+    /** @test */
+    public function ep_valid_stok_produk_berkurang_setelah_checkout()
+    {
+        $this->addToCart(3); // beli 3
+
+        $this->mock(\App\Services\MidtransService::class, function ($mock) {
+            $mock->shouldReceive('createSnapToken')->once()->andReturn('token');
+        });
+
+        $this->actingAs($this->customer)
+             ->postJson(route('customer.checkout.process'), $this->validCheckoutPayload());
+
+        // Stok awal 10, beli 3 → sisa 7
+        $this->assertDatabaseHas('product_variants', ['id' => $this->variant->id, 'stock' => 7]);
+        $this->assertDatabaseHas('products',         ['id' => $this->product->id, 'stock' => 17]); // 20-3
+    }
+
+    /** @test */
+    public function ep_valid_keranjang_dikosongkan_setelah_checkout_berhasil()
+    {
+        $this->addToCart(1);
+
+        $this->mock(\App\Services\MidtransService::class, function ($mock) {
+            $mock->shouldReceive('createSnapToken')->once()->andReturn('token');
+        });
+
+        $this->actingAs($this->customer)
+             ->postJson(route('customer.checkout.process'), $this->validCheckoutPayload());
+
+        $this->assertDatabaseCount('cart_items', 0);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  HALAMAN FINISH
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_halaman_finish_dapat_diakses_dengan_order_code_valid()
+    {
+        $order = Order::create([
+            'user_id'          => $this->customer->id,
+            'order_code'       => 'BI-FINISH-001',
+            'subtotal'         => 150000,
+            'shipping_cost'    => 15000,
+            'total'            => 0,
+            'status'           => 'processing',
+            'payment_status'   => 'paid',
+            'shipping_address' => 'Jl. Test',
+            'courier'          => 'jne',
+            'courier_service'  => 'REG',
+            'paid_at'          => now(),
+        ]);
+
+        $this->actingAs($this->customer)
+             ->get(route('customer.checkout.finish', ['order_id' => $order->order_code]))
+             ->assertStatus(200)
+             ->assertViewIs('customer.checkout.finish');
+    }
+
+    /** @test */
+    public function ep_invalid_halaman_finish_redirect_home_tanpa_order_id()
+    {
+        $this->actingAs($this->customer)
+             ->get(route('customer.checkout.finish'))
+             ->assertRedirect(route('customer.home'));
+    }
+
+    /** @test */
+    public function ep_invalid_halaman_finish_404_order_milik_user_lain()
+    {
+        $otherUser = User::factory()->create([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ]);
+
+        $order = Order::create([
+            'user_id'          => $otherUser->id,
+            'order_code'       => 'BI-OTHER-001',
+            'subtotal'         => 100000,
+            'shipping_cost'    => 10000,
+            'total'            => 110000,
+            'status'           => 'pending',
+            'payment_status'   => 'unpaid',
+            'shipping_address' => 'Jl. Lain',
+            'courier'          => 'jne',
+            'courier_service'  => 'REG',
+        ]);
+
+        $this->actingAs($this->customer)
+             ->get(route('customer.checkout.finish', ['order_id' => $order->order_code]))
+             ->assertStatus(404);
+    }
+}

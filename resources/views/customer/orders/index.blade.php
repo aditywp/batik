@@ -138,24 +138,28 @@
                         <div class="p-6 md:p-8 divide-y divide-gray-50">
                             @foreach($order->items as $item)
                                 @php
-                                    $imagePath = $item->variant->image_path ?? ($item->product->variants->first()?->image_path ?? null);
+                                    // MENGGUNAKAN IMAGE SNAPSHOT TERLEBIH DAHULU
+                                    $imagePath = $item->image_snapshot 
+                                               ?? $item->variant?->image_path 
+                                               ?? $item->product?->variants?->first()?->image_path 
+                                               ?? null;
+                                               
                                     $itemSubtotal = $item->price * $item->quantity;
                                 @endphp
 
                                 <div class="flex items-center justify-between gap-6 py-4 first:pt-0 last:pb-0">
                                     <div class="flex items-center gap-5 flex-1 min-w-0">
-                                        <a href="{{ route('customer.orders.show', $order->order_code) }}" class="w-16 h-20 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 shadow-inner group/img block relative hover:scale-105 transition-transform duration-500">
+                                        <div class="w-16 h-20 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 shadow-inner block relative">
                                             <img src="{{ $imagePath ? asset('storage/' . $imagePath) : asset('images/placeholder.jpg') }}" class="w-full h-full object-cover">
-                                            <div class="absolute inset-0 bg-black/5 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                                                <span class="text-white text-[8px] font-black uppercase tracking-widest bg-black/60 px-1.5 py-0.5 rounded">Receipt</span>
-                                            </div>
-                                        </a>
+                                        </div>
 
                                         <div class="min-w-0 flex-1">
-                                            <h4 class="font-black text-black text-sm uppercase tracking-tight truncate hover:text-orange-500 transition-colors">
-                                                <a href="{{ route('customer.orders.show', $order->order_code) }}">{{ $item->product->name }}</a>
+                                            {{-- NAMA PRODUK SNAPSHOT: AMAN DARI HARD DELETE --}}
+                                            <h4 class="font-black text-black text-sm uppercase tracking-tight truncate">
+                                                {{ $item->product_name_snapshot ?? ($item->product?->name ?? 'Produk Tidak Tersedia') }}
                                             </h4>
-                                            <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">{{ $item->product->collection ?? 'Exquisite Collection' }}</p>
+                                            
+                                            <p class="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">{{ $item->product?->collection ?? 'Arsip' }}</p>
                                             
                                             <p class="text-[10px] font-medium text-stone-500 mt-2">
                                                 Qty: <span class="font-black text-black">{{ $item->quantity }}</span> 
@@ -178,17 +182,13 @@
                             <div>
                                 <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 italic">Total Order Value</p>
                                 
-                                {{-- LOGIKA TAMPILAN VOUCHER --}}
                                 <div class="mb-2">
                                     <h3 class="text-2xl font-black text-[#1a1a2e] italic tracking-tight">
                                         Rp {{ number_format($order->total, 0, ',', '.') }}
                                     </h3>
                                     
-                                    {{-- Jika ada voucher, tampilkan informasinya --}}
                                     @if($order->user_voucher_id)
                                         @php
-                                            // Ambil data voucher melalui relasi jika ada, 
-                                            // atau kita bisa query langsung karena kita simpan user_voucher_id
                                             $voucher = \Illuminate\Support\Facades\DB::table('user_vouchers')
                                                 ->join('vouchers', 'user_vouchers.voucher_id', '=', 'vouchers.id')
                                                 ->where('user_vouchers.id', $order->user_voucher_id)
@@ -209,7 +209,6 @@
                             </div>
                             
                             <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
-                                {{-- Button Pay Now, Cancel, dll tetap sama... --}}
                                 @if($order->payment_status === 'unpaid' || $order->payment_status === 'pending')
                                     <button type="button" onclick="triggerPay('{{ $order->snap_token }}')" 
                                             class="w-full sm:w-auto px-5 h-10 bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-orange-700 transition-all shadow-sm flex items-center justify-center">

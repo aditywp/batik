@@ -10,7 +10,30 @@
     <p class="text-sm text-stone-400 mt-1">Bergabung dan mulai berbelanja batik premium</p>
 </div>
 
-<form action="{{ route('auth.register.post') }}" method="POST" class="space-y-4">
+{{-- Blok Notifikasi / Alert --}}
+@if (session('success'))
+    <div class="mb-5 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+        <div class="flex items-center">
+            <svg class="mr-2 h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span class="font-medium">Berhasil!</span>
+        </div>
+        <p class="mt-1 ml-7">{{ session('success') }}</p>
+    </div>
+@endif
+
+@if (session('error'))
+    <div class="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div class="flex items-center">
+            <svg class="mr-2 h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span class="font-medium">Terjadi Kesalahan!</span>
+        </div>
+        <p class="mt-1 ml-7">{{ session('error') }}</p>
+    </div>
+@endif
+{{-- Akhir Blok Notifikasi --}}
+
+{{-- PERBAIKAN: route action diubah menjadi 'register' --}}
+<form action="{{ route('register') }}" method="POST" class="space-y-4">
     @csrf
 
     {{-- Nama --}}
@@ -101,7 +124,8 @@
 
 <p class="mt-6 text-center text-sm text-stone-400">
     Sudah punya akun?
-    <a href="{{ route('auth.login') }}"
+    {{-- PERBAIKAN: route diubah menjadi 'login' --}}
+    <a href="{{ route('login') }}"
        class="font-medium text-stone-900 hover:underline">
         Masuk di sini
     </a>

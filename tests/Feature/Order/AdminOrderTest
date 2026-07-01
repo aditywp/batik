@@ -1,0 +1,418 @@
+<?php
+
+namespace Tests\Feature\Order;
+
+use App\Models\Category;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+/**
+ * ============================================================
+ * AdminOrderTest — Pengujian Modul Pesanan (Admin)
+ * ============================================================
+ * Cakupan:
+ *  - Index: tampil, filter status, filter payment, search
+ *  - Update Status Pesanan (alur valid & invalid)
+ *  - Rollback stok saat dibatalkan admin
+ *  - Laporan Penjualan (report)
+ *  - Export CSV
+ *
+ * Jalankan: php artisan test --filter=AdminOrderTest
+ * ============================================================
+ */
+class AdminOrderTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User           $admin;
+    private User           $customer;
+    private Product        $product;
+    private ProductVariant $variant;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->admin    = User::factory()->create(['role' => 'admin',    'email_verified_at' => now()]);
+        $this->customer = User::factory()->create(['role' => 'customer', 'email_verified_at' => now(), 'points' => 0]);
+
+        $cat = Category::create(['name' => 'Batik', 'slug' => 'batik']);
+        $this->product = Product::create([
+            'name' => 'Batik Test', 'slug' => 'batik-test', 'description' => 'Desc',
+            'price' => 100000, 'stock' => 20, 'category_id' => $cat->id, 'collection' => 'Women',
+        ]);
+        $this->variant = ProductVariant::create([
+            'product_id' => $this->product->id, 'motif' => 'A', 'size' => 'M', 'stock' => 10,
+        ]);
+    }
+
+    // ─── HELPERS ─────────────────────────────────────────────
+
+    private function makeOrder(array $attrs = []): Order
+    {
+        $order = Order::create(array_merge([
+            'user_id'          => $this->customer->id,
+            'order_code'       => 'BI-' . uniqid(),
+            'subtotal'         => 100000,
+            'shipping_cost'    => 10000,
+            'total'            => 110000,
+            'status'           => 'pending',
+            'payment_status'   => 'unpaid',
+            'shipping_address' => 'Jl. Test No. 1, Sidoarjo',
+            'courier'          => 'jne',
+            'courier_service'  => 'REG',
+        ], $attrs));
+
+        OrderItem::create([
+            'order_id'   => $order->id,
+            'product_id' => $this->product->id,
+            'variant_id' => $this->variant->id,
+            'quantity'   => 2,
+            'price'      => 100000,
+            'subtotal'   => 200000,
+        ]);
+
+        return $order;
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  INDEX — TAMPIL & FILTER
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function admin_dapat_melihat_halaman_daftar_pesanan()
+    {
+        $this->actingAs($this->admin)
+             ->get(route('admin.orders.index'))
+             ->assertStatus(200)
+             ->assertViewIs('admin.orders.index');
+    }
+
+    /** @test */
+    public function tamu_tidak_dapat_akses_halaman_pesanan_admin()
+    {
+        $this->get(route('admin.orders.index'))
+             ->assertRedirect(route('login'));
+    }
+
+    /** @test */
+    public function customer_tidak_dapat_akses_halaman_pesanan_admin()
+    {
+        $response = $this->actingAs($this->customer)->get(route('admin.orders.index'));
+        $this->assertTrue(in_array($response->getStatusCode(), [302, 403]));
+    }
+
+    /** @test */
+    public function ep_valid_filter_pesanan_berdasarkan_status_pending()
+    {
+        $orderPending    = $this->makeOrder(['status' => 'pending']);
+        $orderDelivered  = $this->makeOrder(['status' => 'delivered', 'payment_status' => 'paid',
+                                             'order_code' => 'BI-' . uniqid()]);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.index', ['status' => 'pending']));
+
+        $response->assertStatus(200)
+                 ->assertSee($orderPending->order_code);
+    }
+
+    /** @test */
+    public function ep_valid_filter_pesanan_berdasarkan_payment_status()
+    {
+        $this->makeOrder(['payment_status' => 'paid', 'status' => 'processing']);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.index', ['payment_status' => 'paid']));
+
+        $response->assertStatus(200);
+    }
+
+    /** @test */
+    public function ep_valid_pencarian_pesanan_berdasarkan_order_code()
+    {
+        $order = $this->makeOrder(['order_code' => 'BI-CARI-2025']);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.index', ['search' => 'BI-CARI-2025']));
+
+        $response->assertStatus(200)
+                 ->assertSee('BI-CARI-2025');
+    }
+
+    /** @test */
+    public function ep_valid_pencarian_pesanan_berdasarkan_nama_customer()
+    {
+        $namedUser = User::factory()->create([
+            'name'              => 'Pelanggan Unik XYZ',
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ]);
+        $this->makeOrder(['user_id' => $namedUser->id]);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.index', ['search' => 'Pelanggan Unik XYZ']));
+
+        $response->assertStatus(200);
+    }
+
+    /** @test */
+    public function ep_valid_halaman_pesanan_menampilkan_statistik_ringkasan()
+    {
+        $this->makeOrder(['status' => 'pending']);
+        $this->makeOrder(['status' => 'processing', 'payment_status' => 'paid',
+                          'order_code' => 'BI-PROC-' . uniqid()]);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.index'));
+
+        $response->assertStatus(200)
+                 ->assertViewHas('summary');
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  DETAIL PESANAN
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function admin_dapat_melihat_detail_pesanan()
+    {
+        $order = $this->makeOrder();
+
+        $this->actingAs($this->admin)
+             ->get(route('admin.orders.show', $order))
+             ->assertStatus(200)
+             ->assertViewIs('admin.orders.show');
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  UPDATE STATUS PESANAN
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_update_status_pending_ke_processing()
+    {
+        $order = $this->makeOrder(['status' => 'pending', 'payment_status' => 'paid']);
+
+        $this->actingAs($this->admin)
+             ->patch(route('admin.orders.update-status', $order), ['status' => 'processing'])
+             ->assertRedirect(route('admin.orders.show', $order))
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'processing']);
+    }
+
+    /** @test */
+    public function ep_valid_update_status_processing_ke_shipped_dengan_nomor_resi()
+    {
+        $order = $this->makeOrder(['status' => 'processing', 'payment_status' => 'paid']);
+
+        $this->actingAs($this->admin)
+             ->patch(route('admin.orders.update-status', $order), [
+                 'status'          => 'shipped',
+                 'tracking_number' => 'JNE1234567890',
+             ])
+             ->assertRedirect(route('admin.orders.show', $order));
+
+        $this->assertDatabaseHas('orders', [
+            'id'              => $order->id,
+            'status'          => 'shipped',
+            'tracking_number' => 'JNE1234567890',
+        ]);
+    }
+
+    /** @test */
+    public function ep_valid_update_status_shipped_ke_delivered()
+    {
+        $order = $this->makeOrder(['status' => 'shipped', 'payment_status' => 'paid']);
+
+        $this->actingAs($this->admin)
+             ->patch(route('admin.orders.update-status', $order), ['status' => 'delivered'])
+             ->assertRedirect();
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'delivered']);
+    }
+
+    /** @test */
+    public function ep_invalid_update_status_dengan_status_tidak_ada_dalam_allowed()
+    {
+        // Status "pending" → tidak bisa langsung ke "delivered" (melompat alur)
+        $order = $this->makeOrder(['status' => 'pending']);
+
+        $this->actingAs($this->admin)
+             ->patch(route('admin.orders.update-status', $order), ['status' => 'delivered'])
+             ->assertSessionHasErrors('status');
+    }
+
+    /** @test */
+    public function ep_valid_batalkan_pesanan_admin_rollback_stok_produk()
+    {
+        $stokVarianAwal  = $this->variant->stock;  // 10
+        $stokProdukAwal  = $this->product->stock;  // 20
+
+        $order = $this->makeOrder(['status' => 'processing', 'payment_status' => 'paid']);
+
+        $this->actingAs($this->admin)
+             ->patch(route('admin.orders.update-status', $order), ['status' => 'cancelled'])
+             ->assertRedirect();
+
+        $this->assertDatabaseHas('orders',           ['id' => $order->id, 'status' => 'cancelled']);
+        $this->assertDatabaseHas('product_variants', ['id' => $this->variant->id,  'stock' => $stokVarianAwal + 2]);
+        $this->assertDatabaseHas('products',         ['id' => $this->product->id,  'stock' => $stokProdukAwal + 2]);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  LAPORAN PENJUALAN
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_halaman_laporan_dapat_diakses_admin()
+    {
+        $this->actingAs($this->admin)
+             ->get(route('admin.orders.report'))
+             ->assertStatus(200)
+             ->assertViewIs('admin.orders.report');
+    }
+
+    /** @test */
+    public function ep_valid_laporan_default_filter_tahun_berjalan()
+    {
+        $order = $this->makeOrder(['status' => 'delivered', 'payment_status' => 'paid', 'total' => 110000]);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.report'));
+
+        $response->assertStatus(200)
+                 ->assertViewHas('selectedYear', now()->year)
+                 ->assertViewHas('totalRevenue')
+                 ->assertViewHas('totalTransactions')
+                 ->assertViewHas('chartLabels')
+                 ->assertViewHas('chartData');
+    }
+
+    /** @test */
+    public function ep_valid_laporan_dengan_filter_tahun_tertentu()
+    {
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.report', ['year' => 2025]));
+
+        $response->assertStatus(200)
+                 ->assertViewHas('selectedYear', '2025');
+    }
+
+    /** @test */
+    public function ep_valid_laporan_dengan_filter_tahun_dan_bulan_agregasi_harian()
+    {
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.report', ['year' => now()->year, 'month' => now()->month]));
+
+        $response->assertStatus(200)
+                 ->assertViewHas('selectedMonth');
+    }
+
+    /** @test */
+    public function ep_valid_laporan_tanpa_transaksi_tidak_error()
+    {
+        // Tidak ada order sama sekali
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.report', ['year' => 1990]));
+
+        $response->assertStatus(200)
+                 ->assertViewHas('totalRevenue', 0)
+                 ->assertViewHas('totalTransactions', 0);
+    }
+
+    /** @test */
+    public function ep_valid_laporan_hanya_menghitung_order_berstatus_paid()
+    {
+        // Order lunas
+        $this->makeOrder(['status' => 'delivered', 'payment_status' => 'paid',   'total' => 100000]);
+        // Order belum bayar — TIDAK boleh dihitung
+        $this->makeOrder(['status' => 'pending',   'payment_status' => 'unpaid',  'total' => 50000,
+                          'order_code' => 'BI-' . uniqid()]);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.report'));
+
+        $response->assertStatus(200);
+        $viewData = $response->viewData('totalRevenue');
+        // Revenue seharusnya hanya dari order paid (100000), bukan 150000
+        $this->assertEquals(100000, $viewData);
+    }
+
+    /** @test */
+    public function ep_invalid_customer_tidak_dapat_akses_halaman_laporan()
+    {
+        $response = $this->actingAs($this->customer)->get(route('admin.orders.report'));
+        $this->assertTrue(in_array($response->getStatusCode(), [302, 403]));
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  EXPORT CSV
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_export_csv_semua_pesanan_berhasil_diunduh()
+    {
+        $this->makeOrder(['status' => 'delivered', 'payment_status' => 'paid']);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.export'));
+
+        $response->assertStatus(200);
+        $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('orders-list-', $response->headers->get('Content-Disposition'));
+    }
+
+    /** @test */
+    public function ep_valid_export_csv_dengan_filter_status_delivered()
+    {
+        $orderDelivered = $this->makeOrder(['status' => 'delivered', 'payment_status' => 'paid']);
+        $orderPending   = $this->makeOrder(['status' => 'pending',   'order_code' => 'BI-P-' . uniqid()]);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.export', ['status' => 'delivered']));
+
+        $response->assertStatus(200);
+        $content = $response->streamedContent();
+        $this->assertStringContainsString($orderDelivered->order_code, $content);
+        $this->assertStringNotContainsString($orderPending->order_code, $content);
+    }
+
+    /** @test */
+    public function ep_valid_nama_file_csv_mengandung_tanggal_hari_ini()
+    {
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.export'));
+
+        $disposition = $response->headers->get('Content-Disposition');
+        $this->assertStringContainsString(now()->format('Ymd'), $disposition);
+    }
+
+    /** @test */
+    public function ep_valid_export_csv_berisi_header_kolom_yang_benar()
+    {
+        $this->makeOrder(['status' => 'delivered', 'payment_status' => 'paid']);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.orders.export'));
+
+        $content = $response->streamedContent();
+        $this->assertStringContainsString('Kode Order', $content);
+        $this->assertStringContainsString('Pelanggan', $content);
+        $this->assertStringContainsString('Total', $content);
+        $this->assertStringContainsString('Status', $content);
+    }
+
+    /** @test */
+    public function ep_invalid_customer_tidak_dapat_akses_export_csv()
+    {
+        $response = $this->actingAs($this->customer)->get(route('admin.orders.export'));
+        $this->assertTrue(in_array($response->getStatusCode(), [302, 403]));
+    }
+}

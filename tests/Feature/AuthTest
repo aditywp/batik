@@ -1,0 +1,409 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\User;
+use App\Models\Voucher;
+use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
+use Tests\TestCase;
+
+/**
+ * ============================================================
+ * AuthTest — Pengujian Modul Autentikasi
+ * ============================================================
+ * Cakupan: Registrasi, Login, Logout, Middleware, Reset Password
+ * Jalankan: php artisan test --filter=AuthTest
+ * ============================================================
+ */
+class AuthTest extends TestCase
+{
+    use RefreshDatabase;
+
+    // ─── HELPERS ─────────────────────────────────────────────
+
+    private function makeCustomer(array $attrs = []): User
+    {
+        return User::factory()->create(array_merge([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ], $attrs));
+    }
+
+    private function makeAdmin(array $attrs = []): User
+    {
+        return User::factory()->create(array_merge([
+            'role'              => 'admin',
+            'email_verified_at' => now(),
+        ], $attrs));
+    }
+
+    private function makeWelcomeVoucher(): Voucher
+    {
+        return Voucher::create([
+            'name'               => 'Welcome Voucher',
+            'code'               => 'WELCOME10',
+            'discount_amount'    => 10000,
+            'points_required'    => 0,
+            'is_welcome_voucher' => true,
+            'is_active'          => true,
+            'valid_until'        => now()->addYear()->toDateString(),
+        ]);
+    }
+
+    // ─── HALAMAN ─────────────────────────────────────────────
+
+    /** @test */
+    public function halaman_register_dapat_diakses_tamu()
+    {
+        $this->get('/register')->assertStatus(200);
+    }
+
+    /** @test */
+    public function pengguna_terautentikasi_diarahkan_dari_halaman_register()
+    {
+        $this->actingAs($this->makeCustomer())
+             ->get('/register')
+             ->assertRedirect(route('customer.home'));
+    }
+
+    /** @test */
+    public function halaman_login_dapat_diakses_tamu()
+    {
+        $this->get('/login')->assertStatus(200);
+    }
+
+    /** @test */
+    public function pengguna_terautentikasi_diarahkan_dari_halaman_login()
+    {
+        $this->actingAs($this->makeCustomer())
+             ->get('/login')
+             ->assertRedirect(route('customer.home'));
+    }
+
+    // ─── REGISTRASI – EP VALID ───────────────────────────────
+
+    /** @test */
+    public function ep_valid_registrasi_berhasil_dengan_data_lengkap()
+    {
+        $response = $this->post('/register', [
+            'name'                  => 'Siti Nurhaliza',
+            'email'                 => 'siti@mail.com',
+            'password'              => 'Password123',
+            'password_confirmation' => 'Password123',
+        ]);
+
+        $response->assertRedirect(route('customer.home'));
+        $this->assertAuthenticated();
+        $this->assertDatabaseHas('users', ['email' => 'siti@mail.com', 'role' => 'customer']);
+    }
+
+    /** @test */
+    public function ep_valid_welcome_voucher_otomatis_diberikan_saat_registrasi()
+    {
+        $voucher = $this->makeWelcomeVoucher();
+
+        $this->post('/register', [
+            'name'                  => 'Pelanggan Baru',
+            'email'                 => 'baru@mail.com',
+            'password'              => 'Password123',
+            'password_confirmation' => 'Password123',
+        ]);
+
+        $user = User::where('email', 'baru@mail.com')->firstOrFail();
+        $this->assertDatabaseHas('user_vouchers', [
+            'user_id'    => $user->id,
+            'voucher_id' => $voucher->id,
+        ]);
+    }
+
+    // ─── REGISTRASI – EP INVALID ─────────────────────────────
+
+    /** @test */
+    public function ep_invalid_registrasi_gagal_nama_kosong()
+    {
+        $this->post('/register', [
+            'name' => '', 'email' => 'u@mail.com',
+            'password' => 'Password123', 'password_confirmation' => 'Password123',
+        ])->assertSessionHasErrors('name');
+        $this->assertGuest();
+    }
+
+    /** @test */
+    public function ep_invalid_registrasi_gagal_format_email_salah()
+    {
+        $this->post('/register', [
+            'name' => 'Test', 'email' => 'bukan-email',
+            'password' => 'Password123', 'password_confirmation' => 'Password123',
+        ])->assertSessionHasErrors('email');
+        $this->assertGuest();
+    }
+
+    /** @test */
+    public function ep_invalid_registrasi_gagal_email_sudah_terdaftar()
+    {
+        $this->makeCustomer(['email' => 'ada@mail.com']);
+
+        $this->post('/register', [
+            'name' => 'Duplikat', 'email' => 'ada@mail.com',
+            'password' => 'Password123', 'password_confirmation' => 'Password123',
+        ])->assertSessionHasErrors('email');
+        $this->assertGuest();
+    }
+
+    /** @test */
+    public function ep_invalid_registrasi_gagal_konfirmasi_password_tidak_cocok()
+    {
+        $this->post('/register', [
+            'name' => 'Test', 'email' => 'test@mail.com',
+            'password' => 'Password123', 'password_confirmation' => 'Password456',
+        ])->assertSessionHasErrors('password');
+        $this->assertGuest();
+    }
+
+    // ─── REGISTRASI – BVA PASSWORD ───────────────────────────
+
+    /** @test */
+    public function bva_registrasi_berhasil_password_tepat_8_karakter()
+    {
+        $this->post('/register', [
+            'name' => 'BVA', 'email' => 'bva8@mail.com',
+            'password' => 'Pass1234', 'password_confirmation' => 'Pass1234',
+        ])->assertRedirect(route('customer.home'));
+        $this->assertAuthenticated();
+    }
+
+    /** @test */
+    public function bva_registrasi_gagal_password_7_karakter()
+    {
+        $this->post('/register', [
+            'name' => 'BVA', 'email' => 'bva7@mail.com',
+            'password' => 'Pass123', 'password_confirmation' => 'Pass123',
+        ])->assertSessionHasErrors('password');
+        $this->assertGuest();
+    }
+
+    // ─── LOGIN – EP VALID ─────────────────────────────────────
+
+    /** @test */
+    public function ep_valid_login_berhasil_sebagai_customer()
+    {
+        $user = $this->makeCustomer([
+            'email'    => 'customer@mail.com',
+            'password' => Hash::make('password123'),
+        ]);
+
+        $this->post('/login', ['email' => 'customer@mail.com', 'password' => 'password123'])
+             ->assertRedirect(route('customer.home'));
+        $this->assertAuthenticatedAs($user);
+    }
+
+    /** @test */
+    public function ep_valid_login_berhasil_sebagai_admin_redirect_ke_dashboard()
+    {
+        $admin = $this->makeAdmin([
+            'email'    => 'admin@batik.com',
+            'password' => Hash::make('admin123'),
+        ]);
+
+        $this->post('/login', ['email' => 'admin@batik.com', 'password' => 'admin123'])
+             ->assertRedirect(route('admin.dashboard'));
+        $this->assertAuthenticatedAs($admin);
+    }
+
+    // ─── LOGIN – EP INVALID ───────────────────────────────────
+
+    /** @test */
+    public function ep_invalid_login_gagal_password_salah()
+    {
+        $this->makeCustomer(['email' => 'cust@mail.com', 'password' => Hash::make('benar')]);
+        $this->post('/login', ['email' => 'cust@mail.com', 'password' => 'salah'])
+             ->assertSessionHasErrors('email');
+        $this->assertGuest();
+    }
+
+    /** @test */
+    public function ep_invalid_login_gagal_email_tidak_terdaftar()
+    {
+        $this->post('/login', ['email' => 'tidakada@mail.com', 'password' => 'pass'])
+             ->assertSessionHasErrors('email');
+        $this->assertGuest();
+    }
+
+    /** @test */
+    public function ep_invalid_login_gagal_email_kosong()
+    {
+        $this->post('/login', ['email' => '', 'password' => 'pass'])
+             ->assertSessionHasErrors('email');
+    }
+
+    /** @test */
+    public function ep_invalid_login_gagal_password_kosong()
+    {
+        $this->post('/login', ['email' => 'user@mail.com', 'password' => ''])
+             ->assertSessionHasErrors('password');
+    }
+
+    // ─── LOGOUT ───────────────────────────────────────────────
+
+    /** @test */
+    public function ep_valid_logout_berhasil_sesi_dihapus()
+    {
+        $user = $this->makeCustomer();
+        $this->actingAs($user)->post('/logout')->assertRedirect();
+        $this->assertGuest();
+    }
+
+    // ─── MIDDLEWARE / KONTROL AKSES ───────────────────────────
+
+    /** @test */
+    public function tamu_tidak_dapat_akses_customer_home()
+    {
+        $this->get('/home')->assertRedirect(route('login'));
+    }
+
+    /** @test */
+    public function tamu_tidak_dapat_akses_admin_dashboard()
+    {
+        $this->get('/admin')->assertRedirect(route('login'));
+    }
+
+    /** @test */
+    public function customer_tidak_dapat_akses_halaman_admin()
+    {
+        $customer = $this->makeCustomer();
+        $response = $this->actingAs($customer)->get('/admin');
+        $this->assertTrue(in_array($response->getStatusCode(), [302, 403]));
+    }
+
+    /** @test */
+    public function admin_dapat_akses_dashboard_admin()
+    {
+        $admin = $this->makeAdmin();
+        $this->actingAs($admin)->get('/admin')->assertStatus(200);
+    }
+
+    /** @test */
+    public function customer_dapat_akses_halaman_home()
+    {
+        $customer = $this->makeCustomer();
+        $this->actingAs($customer)->get('/home')->assertStatus(200);
+    }
+
+    // ─── RESET PASSWORD ───────────────────────────────────────
+
+    /** @test */
+    public function halaman_forgot_password_dapat_diakses_tamu()
+    {
+        $this->get('/forgot-password')->assertStatus(200);
+    }
+
+    /** @test */
+    public function ep_valid_permintaan_reset_link_email_terdaftar()
+    {
+        $this->makeCustomer(['email' => 'cust@mail.com']);
+
+        Password::shouldReceive('sendResetLink')
+                ->once()
+                ->with(['email' => 'cust@mail.com'])
+                ->andReturn(Password::RESET_LINK_SENT);
+
+        $this->post('/forgot-password', ['email' => 'cust@mail.com'])
+             ->assertSessionHas('status');
+    }
+
+    /** @test */
+    public function ep_invalid_permintaan_reset_link_email_tidak_terdaftar()
+    {
+        Password::shouldReceive('sendResetLink')
+                ->once()
+                ->andReturn(Password::INVALID_USER);
+
+        $this->post('/forgot-password', ['email' => 'tidakada@mail.com'])
+             ->assertSessionHasErrors('email');
+    }
+
+    /** @test */
+    public function ep_invalid_permintaan_reset_link_email_kosong()
+    {
+        $this->post('/forgot-password', ['email' => ''])
+             ->assertSessionHasErrors('email');
+    }
+
+    /** @test */
+    public function ep_invalid_permintaan_reset_link_format_email_salah()
+    {
+        $this->post('/forgot-password', ['email' => 'bukan-email'])
+             ->assertSessionHasErrors('email');
+    }
+
+    /** @test */
+    public function halaman_reset_password_dapat_diakses_dengan_token()
+    {
+        $this->get('/reset-password/token-dummy')->assertStatus(200);
+    }
+
+    /** @test */
+    public function ep_valid_reset_password_berhasil_dengan_token_valid()
+    {
+        Event::fake([PasswordReset::class]);
+        $user  = $this->makeCustomer(['email' => 'reset@mail.com']);
+        $token = Password::createToken($user);
+
+        $this->post('/reset-password', [
+            'token'                 => $token,
+            'email'                 => 'reset@mail.com',
+            'password'              => 'NewPassword123',
+            'password_confirmation' => 'NewPassword123',
+        ])->assertRedirect(route('login'));
+
+        $this->assertTrue(Hash::check('NewPassword123', $user->fresh()->password));
+        Event::assertDispatched(PasswordReset::class);
+    }
+
+    /** @test */
+    public function bva_reset_password_berhasil_password_tepat_8_karakter()
+    {
+        Event::fake([PasswordReset::class]);
+        $user  = $this->makeCustomer(['email' => 'bva@mail.com']);
+        $token = Password::createToken($user);
+
+        $this->post('/reset-password', [
+            'token'                 => $token,
+            'email'                 => 'bva@mail.com',
+            'password'              => 'NewP1234',
+            'password_confirmation' => 'NewP1234',
+        ])->assertRedirect(route('login'));
+    }
+
+    /** @test */
+    public function ep_invalid_reset_password_gagal_konfirmasi_tidak_cocok()
+    {
+        $user  = $this->makeCustomer(['email' => 'cocok@mail.com']);
+        $token = Password::createToken($user);
+
+        $this->post('/reset-password', [
+            'token'                 => $token,
+            'email'                 => 'cocok@mail.com',
+            'password'              => 'NewPass123',
+            'password_confirmation' => 'NewPass456',
+        ])->assertSessionHasErrors('password');
+    }
+
+    /** @test */
+    public function ep_invalid_reset_password_gagal_token_tidak_valid()
+    {
+        $this->makeCustomer(['email' => 'token@mail.com']);
+
+        $this->post('/reset-password', [
+            'token'                 => 'token-palsu',
+            'email'                 => 'token@mail.com',
+            'password'              => 'NewPass123',
+            'password_confirmation' => 'NewPass123',
+        ])->assertSessionHasErrors('email');
+    }
+}

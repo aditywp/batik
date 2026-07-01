@@ -28,14 +28,22 @@ class CategoryController extends Controller
         return view('admin.categories.index', compact('categories'));
     }
 
-    /**
+/**
      * Menyimpan kategori baru ke database
      */
     public function store(Request $request)
     {
-        // Validasi input: Nama harus unik agar slug tidak bentrok
+        // Validasi input: Hanya abjad & spasi, serta unik
         $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name',
+            'name' => [
+                'required', 
+                'string', 
+                'max:255', 
+                'regex:/^[a-zA-Z\s]+$/', // <-- Tambahkan regex ini
+                'unique:categories,name'
+            ],
+        ], [
+            'name.regex' => 'Nama kategori hanya boleh berisi huruf dan spasi.' // Pesan kustom
         ]);
 
         // Membuat kategori dengan slug otomatis
@@ -52,9 +60,17 @@ class CategoryController extends Controller
      */
     public function update(Request $request, Category $category)
     {
-        // Validasi input: mengecualikan ID kategori saat ini dari aturan unique
+        // Validasi input: mengecualikan ID saat ini dan hanya abjad
         $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name,' . $category->id,
+            'name' => [
+                'required', 
+                'string', 
+                'max:255', 
+                'regex:/^[a-zA-Z\s]+$/', // <-- Tambahkan regex ini
+                'unique:categories,name,' . $category->id
+            ],
+        ], [
+            'name.regex' => 'Nama kategori hanya boleh berisi huruf dan spasi.' // Pesan kustom
         ]);
 
         // Update kategori

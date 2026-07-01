@@ -75,15 +75,14 @@
             </button>
         </form>
 
-        {{-- Export Excel Premium Button --}}
-        <a href="{{ route('admin.orders.exportExcel', request()->query()) }}"
+        {{-- Reset Filter Button --}}
+        <a href="{{ route('admin.orders.index') }}"
            class="flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-stone-200 bg-white
-                  text-xs font-black text-stone-600 uppercase tracking-wider hover:bg-stone-50 transition-colors shadow-sm">
-            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                  text-xs font-black text-stone-600 uppercase tracking-wider hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Export Excel Premium
+            Reset
         </a>
     </div>
 

@@ -1,0 +1,353 @@
+<?php
+
+namespace Tests\Feature\Cart;
+
+use App\Models\CartItem;
+use App\Models\Category;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+/**
+ * ============================================================
+ * CartTest — Pengujian Modul Keranjang Belanja (Customer)
+ * ============================================================
+ * Cakupan: Tambah (Create), Update Kuantitas, Hapus (Delete)
+ * Jalankan: php artisan test --filter=CartTest
+ * ============================================================
+ */
+class CartTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User           $customer;
+    private Product        $product;
+    private ProductVariant $variant;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->customer = User::factory()->create([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ]);
+
+        $category = Category::create(['name' => 'Batik', 'slug' => 'batik']);
+
+        $this->product = Product::create([
+            'name'        => 'Batik Test',
+            'slug'        => 'batik-test',
+            'description' => 'Produk batik untuk testing',
+            'price'       => 100000,
+            'stock'       => 20,
+            'category_id' => $category->id,
+            'collection'  => 'Women',
+            'is_active'   => true,
+        ]);
+
+        $this->variant = ProductVariant::create([
+            'product_id' => $this->product->id,
+            'motif'      => 'Motif A',
+            'size'       => 'M',
+            'stock'      => 10,
+            'price'      => null,
+        ]);
+    }
+
+    // ─── HELPER ──────────────────────────────────────────────
+
+    private function addItemToCart(int $qty = 1): CartItem
+    {
+        return CartItem::create([
+            'user_id'    => $this->customer->id,
+            'product_id' => $this->product->id,
+            'variant_id' => $this->variant->id,
+            'quantity'   => $qty,
+        ]);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  INDEX KERANJANG
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function customer_dapat_melihat_halaman_keranjang()
+    {
+        $this->actingAs($this->customer)
+             ->get(route('customer.cart.index'))
+             ->assertStatus(200)
+             ->assertViewIs('customer.cart.index');
+    }
+
+    /** @test */
+    public function tamu_tidak_dapat_akses_halaman_keranjang()
+    {
+        $this->get(route('customer.cart.index'))
+             ->assertRedirect(route('login'));
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  TAMBAH KE KERANJANG (ADD — CREATE)
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_tambah_produk_baru_ke_keranjang()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.cart.add', $this->product), [
+                 'variant_id' => $this->variant->id,
+                 'quantity'   => 1,
+             ])
+             ->assertRedirect(route('customer.cart.index'))
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('cart_items', [
+            'user_id'    => $this->customer->id,
+            'product_id' => $this->product->id,
+            'variant_id' => $this->variant->id,
+            'quantity'   => 1,
+        ]);
+    }
+
+    /** @test */
+    public function ep_valid_tambah_produk_yang_sudah_ada_di_keranjang_increment_quantity()
+    {
+        // Sudah ada 2 item di keranjang
+        $this->addItemToCart(2);
+
+        $this->actingAs($this->customer)
+             ->post(route('customer.cart.add', $this->product), [
+                 'variant_id' => $this->variant->id,
+                 'quantity'   => 1,
+             ]);
+
+        $this->assertDatabaseHas('cart_items', [
+            'user_id'    => $this->customer->id,
+            'product_id' => $this->product->id,
+            'variant_id' => $this->variant->id,
+            'quantity'   => 3, // 2 + 1
+        ]);
+        $this->assertDatabaseCount('cart_items', 1); // Tidak duplikat
+    }
+
+    /** @test */
+    public function ep_invalid_tambah_produk_tanpa_memilih_varian_gagal()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.cart.add', $this->product), [
+                 'variant_id' => null,
+             ])
+             ->assertSessionHasErrors('variant_id');
+    }
+
+    /** @test */
+    public function ep_invalid_tambah_produk_varian_tidak_ada_di_db_gagal()
+    {
+        $this->actingAs($this->customer)
+             ->post(route('customer.cart.add', $this->product), [
+                 'variant_id' => 9999, // tidak ada
+             ])
+             ->assertSessionHasErrors('variant_id');
+    }
+
+    /** @test */
+    public function ep_invalid_tamu_tidak_dapat_tambah_produk_ke_keranjang()
+    {
+        $this->post(route('customer.cart.add', $this->product), [
+                'variant_id' => $this->variant->id,
+            ])
+             ->assertRedirect(route('login'));
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  UPDATE KUANTITAS
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_tombol_tambah_berhasil_kuantitas_naik_1()
+    {
+        $cartItem = $this->addItemToCart(3);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.cart.update', $cartItem), ['action' => 'increase'])
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('cart_items', ['id' => $cartItem->id, 'quantity' => 4]);
+    }
+
+    /** @test */
+    public function ep_invalid_tombol_tambah_gagal_saat_stok_habis()
+    {
+        // Stok varian = 10, kuantitas di keranjang = 10 (sudah maksimum)
+        $cartItem = $this->addItemToCart(10);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.cart.update', $cartItem), ['action' => 'increase'])
+             ->assertRedirect()
+             ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('cart_items', ['id' => $cartItem->id, 'quantity' => 10]);
+    }
+
+    /** @test */
+    public function ep_valid_tombol_kurang_berhasil_kuantitas_turun_1()
+    {
+        $cartItem = $this->addItemToCart(3);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.cart.update', $cartItem), ['action' => 'decrease'])
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('cart_items', ['id' => $cartItem->id, 'quantity' => 2]);
+    }
+
+    /** @test */
+    public function bva_tombol_kurang_gagal_saat_kuantitas_sudah_1_batas_minimum()
+    {
+        $cartItem = $this->addItemToCart(1);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.cart.update', $cartItem), ['action' => 'decrease'])
+             ->assertRedirect()
+             ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('cart_items', ['id' => $cartItem->id, 'quantity' => 1]);
+    }
+
+    /** @test */
+    public function ep_valid_input_manual_kuantitas_valid_berhasil()
+    {
+        $cartItem = $this->addItemToCart(1);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.cart.update', $cartItem), [
+                 'action'   => 'manual',
+                 'quantity' => 5,
+             ])
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('cart_items', ['id' => $cartItem->id, 'quantity' => 5]);
+    }
+
+    /** @test */
+    public function bva_input_manual_kuantitas_0_gagal()
+    {
+        $cartItem = $this->addItemToCart(2);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.cart.update', $cartItem), [
+                 'action'   => 'manual',
+                 'quantity' => 0,
+             ])
+             ->assertRedirect()
+             ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('cart_items', ['id' => $cartItem->id, 'quantity' => 2]);
+    }
+
+    /** @test */
+    public function bva_input_manual_melebihi_stok_dibatasi_ke_maksimum()
+    {
+        // Stok varian = 10
+        $cartItem = $this->addItemToCart(1);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.cart.update', $cartItem), [
+                 'action'   => 'manual',
+                 'quantity' => 999, // jauh melebihi stok
+             ])
+             ->assertRedirect()
+             ->assertSessionHas('error');
+
+        // Seharusnya dibatasi ke stok maksimum (10)
+        $this->assertDatabaseHas('cart_items', ['id' => $cartItem->id, 'quantity' => 10]);
+    }
+
+    /** @test */
+    public function ep_invalid_update_item_keranjang_milik_user_lain_gagal()
+    {
+        $otherUser = User::factory()->create([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ]);
+        // CartItem milik otherUser
+        $otherItem = CartItem::create([
+            'user_id'    => $otherUser->id,
+            'product_id' => $this->product->id,
+            'variant_id' => $this->variant->id,
+            'quantity'   => 2,
+        ]);
+
+        // Customer utama mencoba update item milik otherUser
+        $response = $this->actingAs($this->customer)
+                         ->patch(route('customer.cart.update', $otherItem), ['action' => 'increase']);
+
+        // Harus 404 karena where('user_id', Auth::id()) + firstOrFail()
+        $response->assertStatus(404);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  HAPUS ITEM (DELETE)
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_hapus_item_keranjang_milik_sendiri_berhasil()
+    {
+        $cartItem = $this->addItemToCart(2);
+
+        $this->actingAs($this->customer)
+             ->delete(route('customer.cart.remove', $cartItem))
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('cart_items', ['id' => $cartItem->id]);
+    }
+
+    /** @test */
+    public function ep_invalid_hapus_item_keranjang_milik_user_lain_tidak_berhasil()
+    {
+        $otherUser = User::factory()->create([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ]);
+        $otherItem = CartItem::create([
+            'user_id'    => $otherUser->id,
+            'product_id' => $this->product->id,
+            'variant_id' => $this->variant->id,
+            'quantity'   => 1,
+        ]);
+
+        $this->actingAs($this->customer)
+             ->delete(route('customer.cart.remove', $otherItem));
+
+        // Item harus masih ada karena where('user_id', Auth::id()) menyaring kepemilikan
+        $this->assertDatabaseHas('cart_items', ['id' => $otherItem->id]);
+    }
+
+    /** @test */
+    public function ep_valid_keranjang_kosong_setelah_semua_item_dihapus()
+    {
+        $item1 = $this->addItemToCart(1);
+        $variant2 = ProductVariant::create([
+            'product_id' => $this->product->id, 'motif' => 'Motif B', 'size' => 'L', 'stock' => 5,
+        ]);
+        $item2 = CartItem::create([
+            'user_id' => $this->customer->id, 'product_id' => $this->product->id,
+            'variant_id' => $variant2->id, 'quantity' => 1,
+        ]);
+
+        $this->actingAs($this->customer)->delete(route('customer.cart.remove', $item1));
+        $this->actingAs($this->customer)->delete(route('customer.cart.remove', $item2));
+
+        $this->assertDatabaseCount('cart_items', 0);
+    }
+}

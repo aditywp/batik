@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Voucher;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class VoucherController extends Controller
 {
@@ -13,7 +14,6 @@ class VoucherController extends Controller
     {
         $query = Voucher::query()->latest();
 
-        // 1. Fitur Pencarian Nama / Kode
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -22,7 +22,6 @@ class VoucherController extends Controller
             });
         }
 
-        // 2. Fitur Filter 3 Status (Aktif, Nonaktif, Kedaluwarsa)
         if ($request->filled('status')) {
             $today = Carbon::now('Asia/Jakarta')->toDateString();
             
@@ -56,7 +55,6 @@ class VoucherController extends Controller
 
     public function store(Request $request)
     {
-        // PERBAIKAN: Penambahan alpha_dash untuk larang spasi & max:9999999 untuk nominal jutaan
         $request->validate([
             'name'            => 'required|string|max:100',
             'code'            => 'required|string|min:3|max:30|alpha_dash|unique:vouchers,code',
@@ -64,7 +62,6 @@ class VoucherController extends Controller
             'points_required' => 'required|integer|min:0|max:10000',
             'valid_until'     => 'nullable|date',
         ], [
-            // Pesan Error Kustom agar Admin lebih paham
             'code.alpha_dash'     => 'Kode voucher tidak boleh mengandung spasi. Hanya boleh huruf, angka, strip (-), dan garis bawah (_).',
             'discount_amount.max' => 'Nominal potongan maksimal adalah Rp 9.999.999.',
         ]);
@@ -93,7 +90,7 @@ class VoucherController extends Controller
 
     public function update(Request $request, Voucher $voucher)
     {
-        // PERBAIKAN: Penambahan alpha_dash untuk larang spasi & max:9999999 untuk nominal jutaan
+        // Kunci dibuka: Admin bebas edit semuanya kapan saja
         $request->validate([
             'name'            => 'required|string|max:100',
             'code'            => 'required|string|min:3|max:30|alpha_dash|unique:vouchers,code,' . $voucher->id,
@@ -101,7 +98,6 @@ class VoucherController extends Controller
             'points_required' => 'required|integer|min:0|max:10000',
             'valid_until'     => 'nullable|date',
         ], [
-            // Pesan Error Kustom agar Admin lebih paham
             'code.alpha_dash'     => 'Kode voucher tidak boleh mengandung spasi. Hanya boleh huruf, angka, strip (-), dan garis bawah (_).',
             'discount_amount.max' => 'Nominal potongan maksimal adalah Rp 9.999.999.',
         ]);
@@ -125,7 +121,9 @@ class VoucherController extends Controller
 
     public function destroy(Voucher $voucher)
     {
-        $voucher->delete();
-        return redirect()->route('admin.vouchers.index')->with('success', 'Voucher berhasil dihapus!');
+        // Langsung hapus permanen tanpa memblokir admin
+        $voucher->delete(); 
+        
+        return redirect()->route('admin.vouchers.index')->with('success', 'Voucher berhasil dihapus permanen dari katalog!');
     }
 }

@@ -73,23 +73,21 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
-        // KUNCI PERBAIKAN: Validasi Back-End diperketat
         $request->validate([
-            'name'                   => 'required|string|max:100', // Maks 100 Karakter
-            'description'            => 'required|string|max:255', // Maks 255 Karakter
-            'price'                  => 'required|numeric|min:10000', // Minimal Rp 10.000
+            'name'                   => 'required|string|max:100',
+            'description'            => 'required|string|max:255', 
+            'price'                  => 'required|numeric|min:10000',
             'category_id'            => 'required|exists:categories,id',
             'collection'             => 'required|string|in:Women,Men,Kids,Craft,Family',
             'motifs'                 => 'required|array|min:1',
-            'motifs.*.name'          => 'required|string|max:100', // Nama motif maks 100
+            'motifs.*.name'          => 'required|string|max:100', 
             'motifs.*.image'         => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'motifs.*.sizes'         => 'required|array|min:1',
-            'motifs.*.sizes.*.size'  => 'required|string', // Wajib diisi 
-            'motifs.*.sizes.*.price' => 'nullable|numeric|min:10000', // Harga khusus minimal Rp 10.000
-            'motifs.*.sizes.*.stock' => 'required|integer|min:0|max:1000', // Stok 0 s/d 1000
+            'motifs.*.sizes.*.size'  => 'required|string', 
+            'motifs.*.sizes.*.price' => 'nullable|numeric|min:10000',
+            'motifs.*.sizes.*.stock' => 'required|integer|min:0|max:1000', 
             'images.*'               => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ], [
-            // Kustomisasi pesan error agar mudah dipahami admin
             'price.min' => 'Harga utama minimal adalah Rp 10.000.',
             'motifs.*.sizes.*.price.min' => 'Harga khusus variasi minimal adalah Rp 10.000.',
             'name.max' => 'Nama produk tidak boleh lebih dari 100 karakter.',
@@ -147,7 +145,7 @@ class ProductController extends Controller
             }
 
             DB::commit();
-            return redirect()->route('admin.products.index')->with('success', 'Produk batik dan variasi berhasil disimpan!');
+            return redirect()->route('admin.products.index')->with('success', 'Produk batik berhasil disimpan!');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -170,7 +168,6 @@ class ProductController extends Controller
      */
     public function update(Request $request, Product $product)
     {
-        // KUNCI PERBAIKAN: Validasi Edit juga harus sama ketatnya dengan validasi Store
         $request->validate([
             'name'                   => 'required|string|max:100', 
             'description'            => 'required|string|max:1000',
@@ -247,7 +244,6 @@ class ProductController extends Controller
 
             DB::commit();
 
-            // REDIRECT LOGIC: Kembali ke halaman asal beserta query filter (pencarian/halaman) jika ada
             if ($request->filled('redirect_to')) {
                 return redirect($request->redirect_to)->with('success', 'Produk berhasil diperbarui!');
             }
@@ -261,30 +257,30 @@ class ProductController extends Controller
     }
 
     /**
-     * Hapus produk.
+     * Hapus produk (Menggunakan fitur Hard Delete Permanen).
      */
-    public function destroy(Product $product)
+    public function destroy($id)
     {
-        // 1. CEK RIWAYAT PESANAN (Mencegah Error 1451)
-        if ($product->orderItems()->exists()) {
-            return back()->with('error', 'Gagal dihapus! Produk ini sudah tercatat dalam riwayat pesanan pelanggan. Silakan ubah status produk menjadi Tidak Aktif agar hilang dari katalog.');
-        }
-
-        // 2. Jika aman (belum pernah dibeli), hapus gambar fisik dari folder storage
-        foreach ($product->images as $img) {
-            Storage::disk('public')->delete($img->image_path);
-        }
-
-        foreach ($product->variants as $variant) {
-            if ($variant->image_path) {
-                Storage::disk('public')->delete($variant->image_path);
-            }
-        }
-
-        // 3. Hapus produk dari database secara permanen
-        $product->delete();
+        // Menggunakan withTrashed() berjaga-jaga apabila produk sebelumnya sudah berstatus Soft Delete
+        $product = Product::withTrashed()->findOrFail($id);
         
-        return redirect()->route('admin.products.index')->with('success', 'Produk berhasil dihapus secara permanen!');
+        // Hapus data varian & gambar dari database secara permanen (jika tidak ada sistem cascade)
+        if (method_exists($product->variants(), 'forceDelete')) {
+            $product->variants()->forceDelete();
+        } else {
+            $product->variants()->delete();
+        }
+
+        if (method_exists($product->images(), 'forceDelete')) {
+            $product->images()->forceDelete();
+        } else {
+            $product->images()->delete();
+        }
+
+        // Hancurkan data produk secara permanen dari database
+        $product->forceDelete();
+        
+        return redirect()->route('admin.products.index')->with('success', 'Produk berhasil dihapus permanen dari sistem!');
     }
     
     /**

@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant; 
+use App\Models\UserVoucher; // Panggil model UserVoucher
 use App\Services\MidtransService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -29,9 +30,10 @@ class CheckoutController extends Controller
                 ->with('error', 'Keranjang belanjamu masih kosong.');
         }
 
-        // Ambil list voucher milik user yang belum digunakan (is_used = false)
-        $myActiveVouchers = $user->vouchers()
-            ->wherePivot('is_used', false)
+        // Membaca daftar voucher aktif langsung dari model dompet
+        $myActiveVouchers = UserVoucher::with('voucher')
+            ->where('user_id', $user->id)
+            ->where('is_used', false)
             ->get();
 
         return view('customer.checkout.index', compact('cartItems', 'myActiveVouchers'));
@@ -44,11 +46,11 @@ class CheckoutController extends Controller
             'courier'          => 'required|string|max:20',
             'courier_service'  => 'required|string|max:20',
             'shipping_cost'    => 'required|integer|min:0',
-            'user_voucher_id'  => 'nullable|integer', // Validasi id voucher dari dompet user
+            'user_voucher_id'  => 'nullable|integer', 
         ]);
 
         $user = Auth::user();
-        $cartItems = $user->cartItems()->with(['product', 'variant'])->get();
+        $cartItems = $user->cartItems()->with(['product.images', 'product.variants', 'variant'])->get();
 
         if ($cartItems->isEmpty()) {
             return response()->json(['message' => 'Keranjang kosong.'], 422);
@@ -56,31 +58,29 @@ class CheckoutController extends Controller
 
         $subtotal = $cartItems->sum(fn($i) => ($i->variant->price ?? $i->product->price) * $i->quantity);
         
-        // --- LOGIKA PEMOTONGAN VOUCHER ---
         $discount = 0;
         $voucherToUse = null;
 
         if ($request->filled('user_voucher_id')) {
-            // Cari data voucher di dompet user yang belum terpakai
-            $voucherToUse = $user->vouchers()
-                ->wherePivot('id', $request->user_voucher_id)
-                ->wherePivot('is_used', false)
+            // Ambil dari dompet berdasarkan ID unik di tabel user_vouchers
+            $voucherToUse = UserVoucher::where('id', $request->user_voucher_id)
+                ->where('user_id', $user->id)
+                ->where('is_used', false)
                 ->first();
 
             if ($voucherToUse) {
-                $discount = $voucherToUse->discount_amount;
+                // Selalu utamakan nominal snapshot yang tersimpan di dompet
+                $discount = $voucherToUse->discount_snapshot;
             }
         }
 
-        // Total akhir dikurangi diskon voucher
         $total = ($subtotal + $request->shipping_cost) - $discount;
         if ($total < 0) {
-            $total = 0; // Jaga-jaga agar tidak minus. Jika voucher lebih besar, total = 0.
+            $total = 0;
         }
 
         DB::transaction(function () use ($request, $cartItems, $subtotal, $total, $voucherToUse, &$order) {
             
-            // LOGIKA LUNAS OTOMATIS: Jika total 0 (gratis), langsung lunas.
             $paymentStatus = $total == 0 ? 'paid' : 'unpaid';
             $orderStatus   = $total == 0 ? 'processing' : 'pending';
             $paidAt        = $total == 0 ? now() : null;
@@ -91,28 +91,29 @@ class CheckoutController extends Controller
                 'subtotal'         => $subtotal,
                 'shipping_cost'    => $request->shipping_cost,
                 'total'            => $total,
-                'status'           => $orderStatus,       // Dinamis
-                'payment_status'   => $paymentStatus,     // Dinamis
-                'paid_at'          => $paidAt,            // Dinamis
+                'status'           => $orderStatus,       
+                'payment_status'   => $paymentStatus,     
+                'paid_at'          => $paidAt,            
                 'shipping_address' => $request->shipping_address,
                 'courier'          => $request->courier,
                 'courier_service'  => $request->courier_service,
-                // SIMPAN ID VOUCHER KE ORDER AGAR BISA DIKEMBALIKAN JIKA BATAL
-                'user_voucher_id'  => $voucherToUse ? $voucherToUse->pivot->id : null,
+                'user_voucher_id'  => $voucherToUse ? $voucherToUse->id : null, // ID dari tabel user_vouchers
             ]);
 
-            // Kunci voucher menjadi terpakai (HANGUS) jika customer menggunakan voucher
             if ($voucherToUse) {
-                DB::table('user_vouchers')
-                    ->where('id', $voucherToUse->pivot->id)
-                    ->update([
-                        'is_used' => true,
-                        'used_at' => now()
-                    ]);
+                $voucherToUse->update([
+                    'is_used' => true,
+                    'used_at' => now()
+                ]);
             }
 
             foreach ($cartItems as $item) {
                 $currentPrice = $item->variant->price ?? $item->product->price;
+
+                $imagePathSnapshot = $item->variant?->image_path 
+                                   ?? $item->product->variants->first()?->image_path 
+                                   ?? $item->product->images->first()?->image_path 
+                                   ?? null;
 
                 OrderItem::create([
                     'order_id'   => $order->id,
@@ -121,6 +122,9 @@ class CheckoutController extends Controller
                     'quantity'   => $item->quantity,
                     'price'      => $currentPrice,
                     'subtotal'   => $currentPrice * $item->quantity,
+                    'product_name_snapshot' => $item->product->name,
+                    'price_snapshot'        => $currentPrice,
+                    'image_snapshot'        => $imagePathSnapshot,
                 ]);
 
                 if ($item->variant_id) {
@@ -134,18 +138,14 @@ class CheckoutController extends Controller
 
         $order->load('items.product');
 
-        // ==============================================================
-        // BYPASS MIDTRANS: JIKA PESANAN GRATIS (0), JANGAN PANGGIL API MIDTRANS
-        // ==============================================================
         if ($total == 0) {
             return response()->json([
-                'is_free'    => true, // Penanda untuk frontend bahwa ini pesanan gratis
+                'is_free'    => true, 
                 'order_code' => $order->order_code,
                 'message'    => 'Pesanan gratis karena terpotong voucher sepenuhnya.'
             ]);
         }
 
-        // JIKA TIDAK GRATIS, LANJUTKAN KE MIDTRANS NORMAL
         $snapToken = $this->midtrans->createSnapToken($order);
         $order->update(['snap_token' => $snapToken]);
 
@@ -168,7 +168,6 @@ class CheckoutController extends Controller
             ->where('user_id', Auth::id())
             ->firstOrFail();
 
-        // JIKA PESANAN SUDAH LUNAS KARENA VOUCHER (Rp 0), LEWATI CEK MIDTRANS
         if ($order->total == 0 && $order->payment_status === 'paid') {
             return view('customer.checkout.finish', compact('order'));
         }
@@ -189,7 +188,6 @@ class CheckoutController extends Controller
                     'paid_at'                 => now(),
                 ]);
             } elseif (in_array($transactionStatus, ['expire', 'cancel', 'deny'])) {
-                // LOGIC ROLLBACK STOK & VOUCHER JIKA BATAL
                 if ($order->payment_status !== 'cancelled') {
                     foreach ($order->items as $item) {
                         if ($item->variant_id) {
@@ -198,14 +196,11 @@ class CheckoutController extends Controller
                         Product::where('id', $item->product_id)->increment('stock', $item->quantity);
                     }
                     
-                    // KEMBALIKAN VOUCHER KE DOMPET CUSTOMER
                     if ($order->user_voucher_id) {
-                        DB::table('user_vouchers')
-                            ->where('id', $order->user_voucher_id)
-                            ->update([
-                                'is_used' => false,
-                                'used_at' => null
-                            ]);
+                        UserVoucher::where('id', $order->user_voucher_id)->update([
+                            'is_used' => false,
+                            'used_at' => null
+                        ]);
                     }
 
                     $order->update(['payment_status' => 'cancelled', 'status' => 'cancelled']);

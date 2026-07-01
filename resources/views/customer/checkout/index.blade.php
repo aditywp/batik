@@ -147,16 +147,16 @@
                 
                 <div class="mb-4 md:mb-6">
                     <label class="block text-xs md:text-sm font-bold mb-2 text-black">Punya Voucher Diskon?</label>
-                    <select id="user_voucher_id" class="w-full border border-gray-300 rounded-xl px-3 py-3 md:px-4 md:py-3.5 text-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-black transition-shadow truncate">
-                        <option value="" data-discount="0">Tidak memakai voucher</option>
-                        @if(isset($myActiveVouchers) && $myActiveVouchers->count() > 0)
-                            @foreach($myActiveVouchers as $voucher)
-                                <option value="{{ $voucher->pivot->id }}" data-discount="{{ $voucher->discount_amount }}">
-                                    {{ $voucher->name }} (Potongan Rp {{ number_format($voucher->discount_amount, 0, ',', '.') }})
-                                </option>
-                            @endforeach
-                        @endif
-                    </select>
+                <select id="user_voucher_id" class="w-full border border-gray-300 rounded-xl px-3 py-3 md:px-4 md:py-3.5 text-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-black transition-shadow truncate">
+                    <option value="" data-discount="0">Tidak memakai voucher</option>
+                    @if(isset($myActiveVouchers) && $myActiveVouchers->count() > 0)
+                        @foreach($myActiveVouchers as $voucher)
+                            <option value="{{ $voucher->id }}" data-discount="{{ (int)$voucher->discount_snapshot }}">
+                                {{ $voucher->voucher?->name ?? 'Voucher Spesial' }} (Potongan Rp {{ number_format($voucher->discount_snapshot, 0, ',', '.') }})
+                            </option>
+                        @endforeach
+                    @endif
+                </select>
                 </div>
 
                 <div class="flex justify-between text-gray-600 text-sm font-medium"><span>Subtotal</span><span>Rp {{ number_format($subtotal,0,',','.') }}</span></div>
@@ -372,7 +372,6 @@ $(document).ready(function () {
 
                 if (response.snap_token) {
                     snap.pay(response.snap_token, {
-                        // PERBAIKAN: Menangkap parameter `result.payment_type` dan mengirimnya ke URL
                         onSuccess: function(result) { 
                             let paymentType = result.payment_type ? result.payment_type : '';
                             window.location.href = "/checkout/finish?order_id=" + response.order_code + "&payment_type=" + paymentType; 

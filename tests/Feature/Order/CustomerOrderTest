@@ -1,0 +1,332 @@
+<?php
+
+namespace Tests\Feature\Order;
+
+use App\Models\Category;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+/**
+ * ============================================================
+ * CustomerOrderTest — Pengujian Modul Pesanan (Customer)
+ * ============================================================
+ * Cakupan:
+ *  - Index: tampil, pencarian, filter tanggal
+ *  - Show detail pesanan
+ *  - Complete (konfirmasi diterima) + perhitungan poin
+ *  - Cancel (pembatalan) + rollback stok & voucher
+ *
+ * Jalankan: php artisan test --filter=CustomerOrderTest
+ * ============================================================
+ */
+class CustomerOrderTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User           $customer;
+    private Product        $product;
+    private ProductVariant $variant;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->customer = User::factory()->create([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ]);
+
+        $cat = Category::create(['name' => 'Batik', 'slug' => 'batik']);
+        $this->product = Product::create([
+            'name' => 'Batik Test', 'slug' => 'batik-test', 'description' => 'Desc',
+            'price' => 100000, 'stock' => 20, 'category_id' => $cat->id, 'collection' => 'Women',
+        ]);
+        $this->variant = ProductVariant::create([
+            'product_id' => $this->product->id, 'motif' => 'A', 'size' => 'M', 'stock' => 10,
+        ]);
+    }
+
+    // ─── HELPERS ─────────────────────────────────────────────
+
+    private function makeOrder(array $attrs = [], int $qty = 2): Order
+    {
+        $order = Order::create(array_merge([
+            'user_id'          => $this->customer->id,
+            'order_code'       => 'BI-' . uniqid(),
+            'subtotal'         => 100000 * $qty,
+            'shipping_cost'    => 10000,
+            'total'            => (100000 * $qty) + 10000,
+            'status'           => 'pending',
+            'payment_status'   => 'unpaid',
+            'shipping_address' => 'Jl. Test, Sidoarjo',
+            'courier'          => 'jne',
+            'courier_service'  => 'REG',
+        ], $attrs));
+
+        OrderItem::create([
+            'order_id'   => $order->id,
+            'product_id' => $this->product->id,
+            'variant_id' => $this->variant->id,
+            'quantity'   => $qty,
+            'price'      => 100000,
+            'subtotal'   => 100000 * $qty,
+        ]);
+
+        return $order;
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  INDEX — DAFTAR PESANAN CUSTOMER
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function customer_dapat_melihat_daftar_pesanannya()
+    {
+        $order = $this->makeOrder();
+
+        $this->actingAs($this->customer)
+             ->get(route('customer.orders.index'))
+             ->assertStatus(200)
+             ->assertViewIs('customer.orders.index')
+             ->assertSee($order->order_code);
+    }
+
+    /** @test */
+    public function tamu_tidak_dapat_akses_daftar_pesanan()
+    {
+        $this->get(route('customer.orders.index'))
+             ->assertRedirect(route('login'));
+    }
+
+    /** @test */
+    public function customer_tidak_melihat_pesanan_milik_customer_lain()
+    {
+        $otherUser = User::factory()->create([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ]);
+        $otherOrder = $this->makeOrder(['user_id' => $otherUser->id]);
+
+        $this->actingAs($this->customer)
+             ->get(route('customer.orders.index'))
+             ->assertStatus(200)
+             ->assertDontSee($otherOrder->order_code);
+    }
+
+    /** @test */
+    public function ep_valid_pencarian_pesanan_berdasarkan_kode_order()
+    {
+        $order       = $this->makeOrder(['order_code' => 'BI-CARI-UNIK']);
+        $orderLainnya = $this->makeOrder(['order_code' => 'BI-LAIN-' . uniqid()]);
+
+        $response = $this->actingAs($this->customer)
+                         ->get(route('customer.orders.index', ['search' => 'BI-CARI-UNIK']));
+
+        $response->assertStatus(200)
+                 ->assertSee('BI-CARI-UNIK')
+                 ->assertDontSee($orderLainnya->order_code);
+    }
+
+    /** @test */
+    public function ep_valid_filter_pesanan_berdasarkan_tanggal()
+    {
+        $order = $this->makeOrder(['created_at' => now()->toDateTimeString()]);
+
+        $response = $this->actingAs($this->customer)
+                         ->get(route('customer.orders.index', ['date' => now()->toDateString()]));
+
+        $response->assertStatus(200)
+                 ->assertSee($order->order_code);
+    }
+
+    /** @test */
+    public function ep_valid_filter_tanggal_tidak_ada_pesanan_daftar_kosong()
+    {
+        $order = $this->makeOrder();
+
+        $response = $this->actingAs($this->customer)
+                         ->get(route('customer.orders.index', ['date' => '1990-01-01']));
+
+        $response->assertStatus(200)
+                 ->assertDontSee($order->order_code);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  SHOW — DETAIL PESANAN
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function customer_dapat_melihat_detail_pesanannya_sendiri()
+    {
+        $order = $this->makeOrder();
+
+        $this->actingAs($this->customer)
+             ->get(route('customer.orders.show', $order->order_code))
+             ->assertStatus(200)
+             ->assertViewIs('customer.orders.show');
+    }
+
+    /** @test */
+    public function ep_invalid_customer_tidak_dapat_lihat_detail_pesanan_milik_orang_lain()
+    {
+        $otherUser = User::factory()->create([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ]);
+        $otherOrder = $this->makeOrder(['user_id' => $otherUser->id]);
+
+        $this->actingAs($this->customer)
+             ->get(route('customer.orders.show', $otherOrder->order_code))
+             ->assertStatus(404);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  COMPLETE — KONFIRMASI PENERIMAAN
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_customer_dapat_konfirmasi_pesanan_berstatus_shipped()
+    {
+        $order = $this->makeOrder(['status' => 'shipped', 'payment_status' => 'paid', 'total' => 210000]);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.orders.complete', $order))
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'delivered']);
+    }
+
+    /** @test */
+    public function ep_valid_poin_customer_bertambah_setelah_konfirmasi_terima()
+    {
+        // Total 210000 → poin = floor(210000 / 10000) = 21
+        $order = $this->makeOrder(['status' => 'shipped', 'payment_status' => 'paid', 'total' => 210000]);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.orders.complete', $order));
+
+        $this->assertDatabaseHas('users', [
+            'id'     => $this->customer->id,
+            'points' => 21,
+        ]);
+    }
+
+    /** @test */
+    public function ep_invalid_customer_tidak_dapat_complete_pesanan_bukan_shipped()
+    {
+        $order = $this->makeOrder(['status' => 'processing', 'payment_status' => 'paid']);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.orders.complete', $order))
+             ->assertRedirect()
+             ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'processing']);
+    }
+
+    /** @test */
+    public function ep_invalid_customer_tidak_dapat_complete_pesanan_milik_orang_lain()
+    {
+        $otherUser = User::factory()->create([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ]);
+        $otherOrder = $this->makeOrder(['user_id' => $otherUser->id, 'status' => 'shipped']);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.orders.complete', $otherOrder))
+             ->assertStatus(403);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  CANCEL — PEMBATALAN PESANAN
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_customer_dapat_membatalkan_pesanan_unpaid()
+    {
+        $stokVarianAwal = $this->variant->stock;  // 10
+        $stokProdukAwal = $this->product->stock;  // 20
+
+        $order = $this->makeOrder(['status' => 'pending', 'payment_status' => 'unpaid'], qty: 2);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.orders.cancel', $order))
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        // Status berubah cancelled
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'cancelled', 'payment_status' => 'cancelled']);
+
+        // Stok dikembalikan
+        $this->assertDatabaseHas('product_variants', ['id' => $this->variant->id,  'stock' => $stokVarianAwal + 2]);
+        $this->assertDatabaseHas('products',         ['id' => $this->product->id,  'stock' => $stokProdukAwal + 2]);
+    }
+
+    /** @test */
+    public function ep_valid_voucher_dikembalikan_ke_dompet_saat_pesanan_dibatalkan()
+    {
+        $order = $this->makeOrder(['status' => 'pending', 'payment_status' => 'unpaid']);
+
+        // Simulasikan user_voucher yang dipakai di order ini
+        $uvId = DB::table('user_vouchers')->insertGetId([
+            'user_id'    => $this->customer->id,
+            'voucher_id' => \App\Models\Voucher::create([
+                'name'            => 'VTest', 'code'    => 'VT' . uniqid(),
+                'discount_amount' => 20000,   'points_required' => 0,
+                'is_active'       => true,    'valid_until' => null,
+            ])->id,
+            'is_used'    => true,
+            'used_at'    => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $order->update(['user_voucher_id' => $uvId]);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.orders.cancel', $order));
+
+        // Voucher dikembalikan (is_used = false)
+        $this->assertDatabaseHas('user_vouchers', ['id' => $uvId, 'is_used' => false]);
+    }
+
+    /** @test */
+    public function ep_invalid_customer_tidak_dapat_batalkan_pesanan_yang_sudah_shipped()
+    {
+        $order = $this->makeOrder(['status' => 'shipped', 'payment_status' => 'paid']);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.orders.cancel', $order))
+             ->assertRedirect()
+             ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'shipped']);
+    }
+
+    /** @test */
+    public function ep_invalid_customer_tidak_dapat_batalkan_pesanan_milik_orang_lain()
+    {
+        $otherUser = User::factory()->create([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+        ]);
+        $otherOrder = $this->makeOrder(['user_id' => $otherUser->id, 'payment_status' => 'unpaid']);
+
+        $this->actingAs($this->customer)
+             ->patch(route('customer.orders.cancel', $otherOrder))
+             ->assertStatus(403);
+    }
+}

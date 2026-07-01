@@ -67,14 +67,17 @@
                   {{ request()->routeIs('admin.orders.index') || request()->routeIs('admin.orders.show')
                       ? 'text-[#e8c9a0] bg-[#e8c9a0]/10 border-[#e8c9a0]'
                       : 'text-white/55 hover:text-white/85 hover:bg-white/5 border-transparent' }}">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
             </svg>
-            Pesanan
-            @php $pending = \App\Models\Order::where('status', 'pending')->count(); @endphp
-            @if($pending > 0)
-                <span class="ml-auto text-xs bg-amber-400 text-amber-900 font-semibold px-1.5 py-0.5 rounded-full">
-                    {{ $pending }}
+            <span class="truncate">Pesanan</span>
+            @php 
+                $activeOrders = \App\Models\Order::whereIn('status', ['pending', 'processing', 'shipped'])->count(); 
+            @endphp
+            
+            @if($activeOrders > 0)
+                <span class="ml-auto text-[10px] bg-amber-400 text-amber-900 font-bold px-1.5 py-0.5 rounded-full">
+                    {{ $activeOrders }}
                 </span>
             @endif
         </a>

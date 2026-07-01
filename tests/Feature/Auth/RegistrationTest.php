@@ -25,7 +25,8 @@ class RegistrationTest extends TestCase
             'password_confirmation' => 'password',
         ]);
 
-        $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+        $this->assertAuthenticated(); // Sekarang ini akan LULUS karena sudah Auth::login
+        $response->assertSessionHas('registered_success'); // Cek apakah pesan sukses ada di session
+        $response->assertStatus(302); // Memastikan ada redirect back
     }
 }

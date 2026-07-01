@@ -1,0 +1,221 @@
+<?php
+
+namespace Tests\Feature\Profile;
+
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Tests\TestCase;
+
+/**
+ * ============================================================
+ * ProfileTest — Pengujian Modul Profil Pengguna
+ * ============================================================
+ * Cakupan:
+ *  - Akses halaman profil
+ *  - Update nama & email (EP Valid/Invalid)
+ *  - email_verified_at di-reset saat email berubah
+ *  - Hapus akun (EP Valid/Invalid)
+ *
+ * Jalankan: php artisan test --filter=ProfileTest
+ * ============================================================
+ */
+class ProfileTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function makeCustomer(array $attrs = []): User
+    {
+        return User::factory()->create(array_merge([
+            'role'              => 'customer',
+            'email_verified_at' => now(),
+            'points'            => 0,
+            'password'          => Hash::make('password123'),
+        ], $attrs));
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  AKSES HALAMAN PROFIL
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function customer_dapat_mengakses_halaman_profil()
+    {
+        $user = $this->makeCustomer();
+
+        $this->actingAs($user)
+             ->get(route('customer.profile.edit'))
+             ->assertStatus(200)
+             ->assertViewIs('profile.edit');
+    }
+
+    /** @test */
+    public function tamu_tidak_dapat_akses_halaman_profil()
+    {
+        $this->get(route('customer.profile.edit'))
+             ->assertRedirect(route('login'));
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  UPDATE PROFIL – EP VALID
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_update_nama_profil_tanpa_mengubah_email()
+    {
+        $user = $this->makeCustomer(['email' => 'user@mail.com']);
+
+        $this->actingAs($user)
+             ->patch(route('customer.profile.update'), [
+                 'name'  => 'Nama Baru',
+                 'email' => 'user@mail.com', // email tidak berubah
+             ])
+             ->assertRedirect()
+             ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'name' => 'Nama Baru']);
+        // email_verified_at TIDAK di-reset karena email tidak berubah
+        $this->assertNotNull($user->fresh()->email_verified_at);
+    }
+
+    /** @test */
+    public function ep_valid_update_email_profil_me_reset_email_verified_at()
+    {
+        $user = $this->makeCustomer(['email' => 'lama@mail.com']);
+
+        $this->actingAs($user)
+             ->patch(route('customer.profile.update'), [
+                 'name'  => $user->name,
+                 'email' => 'baru@mail.com', // email berubah
+             ])
+             ->assertRedirect()
+             ->assertSessionHasNoErrors();
+
+        $fresh = $user->fresh();
+        $this->assertEquals('baru@mail.com', $fresh->email);
+        // email_verified_at HARUS di-reset menjadi null
+        $this->assertNull($fresh->email_verified_at);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  UPDATE PROFIL – EP INVALID
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_invalid_update_profil_gagal_nama_kosong()
+    {
+        $user = $this->makeCustomer();
+
+        $this->actingAs($user)
+             ->patch(route('customer.profile.update'), [
+                 'name'  => '',
+                 'email' => $user->email,
+             ])
+             ->assertSessionHasErrors('name');
+    }
+
+    /** @test */
+    public function ep_invalid_update_profil_gagal_email_format_salah()
+    {
+        $user = $this->makeCustomer();
+
+        $this->actingAs($user)
+             ->patch(route('customer.profile.update'), [
+                 'name'  => $user->name,
+                 'email' => 'bukan-format-email',
+             ])
+             ->assertSessionHasErrors('email');
+    }
+
+    /** @test */
+    public function ep_invalid_update_profil_gagal_email_sudah_dipakai_user_lain()
+    {
+        $this->makeCustomer(['email' => 'sudahada@mail.com']);
+        $user = $this->makeCustomer(['email' => 'milik@mail.com']);
+
+        $this->actingAs($user)
+             ->patch(route('customer.profile.update'), [
+                 'name'  => $user->name,
+                 'email' => 'sudahada@mail.com',
+             ])
+             ->assertSessionHasErrors('email');
+    }
+
+    /** @test */
+    public function ep_valid_update_email_dengan_email_sama_tidak_error_unique()
+    {
+        $user = $this->makeCustomer(['email' => 'sama@mail.com']);
+
+        // Mengubah ke email yang sama — aturan unique harus mengecualikan diri sendiri
+        $this->actingAs($user)
+             ->patch(route('customer.profile.update'), [
+                 'name'  => 'Nama Sama',
+                 'email' => 'sama@mail.com',
+             ])
+             ->assertSessionDoesntHaveErrors('email');
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  HAPUS AKUN
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_hapus_akun_berhasil_dengan_password_yang_benar()
+    {
+        $user = $this->makeCustomer(['password' => Hash::make('password123')]);
+
+        $this->actingAs($user)
+             ->delete(route('customer.profile.destroy'), [
+                 'password' => 'password123',
+             ])
+             ->assertRedirect('/');
+
+        $this->assertDatabaseMissing('users', ['id' => $user->id]);
+        $this->assertGuest();
+    }
+
+    /** @test */
+    public function ep_invalid_hapus_akun_gagal_dengan_password_yang_salah()
+    {
+        $user = $this->makeCustomer(['password' => Hash::make('password123')]);
+
+        $this->actingAs($user)
+             ->delete(route('customer.profile.destroy'), [
+                 'password' => 'passwordsalah',
+             ])
+             ->assertSessionHasErrorsIn('userDeletion', ['password']);
+
+        // Akun masih ada
+        $this->assertDatabaseHas('users', ['id' => $user->id]);
+    }
+
+    /** @test */
+    public function ep_invalid_hapus_akun_gagal_password_kosong()
+    {
+        $user = $this->makeCustomer();
+
+        $this->actingAs($user)
+             ->delete(route('customer.profile.destroy'), ['password' => ''])
+             ->assertSessionHasErrors('password');
+
+        $this->assertDatabaseHas('users', ['id' => $user->id]);
+    }
+
+    /** @test */
+    public function ep_valid_setelah_hapus_akun_sesi_dihancurkan()
+    {
+        $user = $this->makeCustomer(['password' => Hash::make('password123')]);
+        $this->actingAs($user);
+
+        $this->delete(route('customer.profile.destroy'), ['password' => 'password123']);
+
+        $this->assertGuest();
+    }
+
+    /** @test */
+    public function tamu_tidak_dapat_menghapus_akun()
+    {
+        $this->delete(route('customer.profile.destroy'), ['password' => 'password123'])
+             ->assertRedirect(route('login'));
+    }
+}

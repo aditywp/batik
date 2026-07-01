@@ -29,16 +29,13 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Nominal Potongan <span class="text-red-500">*</span></label>
                 <div class="relative">
-                    {{-- Tulisan Rp Statis di Kiri --}}
                     <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <span class="text-gray-500 font-bold text-sm">Rp</span>
                     </div>
                     
-                    {{-- Input Teks yang Terlihat (Untuk ngetik dengan titik) --}}
                     <input type="text" id="discount_visible" required placeholder="Contoh: 50.000" 
                            class="w-full border border-gray-300 rounded-lg pl-11 pr-4 py-2.5 focus:ring-2 focus:ring-black focus:outline-none">
                     
-                    {{-- Input Hidden yang Dikirim ke Database Laravel (Tanpa titik) --}}
                     <input type="hidden" name="discount_amount" id="discount_hidden" 
                            value="{{ old('discount_amount', isset($voucher) ? floatval($voucher->discount_amount) : '') }}">
                 </div>
@@ -47,7 +44,6 @@
             
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Syarat Poin <span class="text-red-500">*</span></label>
-                {{-- PERBAIKAN: onkeypress untuk tolak karakter minus (-), huruf, dll --}}
                 <input type="number" name="points_required" value="{{ old('points_required', $voucher->points_required) }}" required min="0" max="10000" 
                        onkeypress="return event.charCode >= 48 && event.charCode <= 57"
                        oninput="if(this.value !== '' && parseInt(this.value) > 10000) this.value = 10000;" 
@@ -79,7 +75,6 @@
     </form>
 </div>
 
-{{-- SCRIPT UNTUK MASKING INPUT RUPIAH --}}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const visibleInput = document.getElementById('discount_visible');

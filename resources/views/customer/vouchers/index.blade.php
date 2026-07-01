@@ -65,15 +65,22 @@
                 </button>
             </div>
 
+            {{-- TAB TERSEDIA --}}
             <div x-show="activeTab === 'tersedia'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-6 fade-in">
                 @forelse($availableVouchers as $myVoucher)
                     <div class="bg-white border-2 border-black rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden shadow-sm">
                         <div class="absolute w-6 h-6 bg-[#f5f5f5] rounded-full -left-3 top-1/2"></div>
                         <div class="absolute w-6 h-6 bg-[#f5f5f5] rounded-full -right-3 top-1/2"></div>
                         <div class="pl-4">
-                            <div class="text-xs text-gray-500 font-mono tracking-widest uppercase mb-1">{{ $myVoucher->code }}</div>
-                            <h3 class="text-xl font-bold text-black">{{ $myVoucher->name }}</h3>
-                            <div class="text-3xl font-black text-black mt-4">Rp {{ number_format($myVoucher->discount_amount, 0, ',', '.') }}</div>
+                            {{-- LOGIKA SNAPSHOT: Mengambil data yang terkunci dari Model UserVoucher --}}
+                            @php
+                                $lockedCode = $myVoucher->code_snapshot;
+                                $lockedDiscount = $myVoucher->discount_snapshot;
+                            @endphp
+
+                            <div class="text-xs text-gray-500 font-mono tracking-widest uppercase mb-1">{{ $lockedCode }}</div>
+                            <h3 class="text-xl font-bold text-black">{{ $myVoucher->voucher?->name ?? 'Voucher Spesial' }}</h3>
+                            <div class="text-3xl font-black text-black mt-4">Rp {{ number_format($lockedDiscount, 0, ',', '.') }}</div>
                             <span class="inline-block mt-4 bg-green-100 text-green-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">Tersedia</span>
                         </div>
                     </div>
@@ -84,17 +91,23 @@
                 @endforelse
             </div>
 
+            {{-- TAB TERPAKAI --}}
             <div x-show="activeTab === 'terpakai'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-6 fade-in">
                 @forelse($usedVouchers as $myVoucher)
                     <div class="bg-gray-100 border border-gray-200 rounded-2xl p-6 opacity-60 grayscale relative overflow-hidden">
                         <div class="absolute w-6 h-6 bg-[#f5f5f5] rounded-full -left-3 top-1/2"></div>
                         <div class="absolute w-6 h-6 bg-[#f5f5f5] rounded-full -right-3 top-1/2"></div>
                         <div class="pl-4">
-                            <div class="text-xs text-gray-400 font-mono uppercase">{{ $myVoucher->code }}</div>
-                            <h3 class="text-xl font-bold mt-1">{{ $myVoucher->name }}</h3>
-                            <div class="text-3xl font-black mt-4">Rp {{ number_format($myVoucher->discount_amount, 0, ',', '.') }}</div>
+                            @php
+                                $lockedCode = $myVoucher->code_snapshot;
+                                $lockedDiscount = $myVoucher->discount_snapshot;
+                            @endphp
+
+                            <div class="text-xs text-gray-400 font-mono uppercase">{{ $lockedCode }}</div>
+                            <h3 class="text-xl font-bold mt-1">{{ $myVoucher->voucher?->name ?? 'Voucher Spesial (Diarsipkan)' }}</h3>
+                            <div class="text-3xl font-black mt-4">Rp {{ number_format($lockedDiscount, 0, ',', '.') }}</div>
                             <div class="text-[10px] text-gray-500 mt-4 uppercase font-bold">
-                                Digunakan: {{ \Carbon\Carbon::parse($myVoucher->pivot->used_at)->format('d M Y') }}
+                                Digunakan: {{ $myVoucher->used_at ? $myVoucher->used_at->format('d M Y') : '-' }}
                             </div>
                         </div>
                     </div>
@@ -120,14 +133,11 @@
                 @forelse($vouchers as $voucher)
                     <div class="bg-white p-6 rounded-2xl border border-gray-200 hover:border-black hover:shadow-lg transition-all flex flex-col h-full relative overflow-hidden group">
                         
-                        {{-- Aksen Visual di pojok kanan atas --}}
                         <div class="absolute top-0 right-0 w-20 h-20 bg-green-50 rounded-bl-full -z-0 group-hover:bg-green-100 transition-colors"></div>
 
-                        {{-- Bagian Atas: Info Utama --}}
                         <div class="flex-grow relative z-10">
                             <h3 class="font-bold text-lg mb-1 text-gray-800 line-clamp-2">{{ $voucher->name }}</h3>
                             
-                            {{-- Info Potongan Diskon --}}
                             <div class="mt-4 mb-2">
                                 <p class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Nilai Potongan</p>
                                 <div class="text-3xl font-black text-green-600 tracking-tight">
@@ -135,14 +145,12 @@
                                 </div>
                             </div>
 
-                            {{-- Info Masa Berlaku --}}
                             <div class="flex items-center gap-1.5 text-xs font-medium text-gray-500 mt-4">
                                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                 {{ $voucher->valid_until ? 'Berlaku s/d ' . \Carbon\Carbon::parse($voucher->valid_until)->format('d M Y') : 'Tanpa Batas Waktu' }}
                             </div>
                         </div>
                         
-                        {{-- Bagian Bawah: Harga Poin & Tombol Aksi --}}
                         <div class="mt-6 pt-5 border-t border-gray-100 relative z-10">
                             <div class="flex items-center justify-between mb-4">
                                 <span class="text-sm font-bold text-gray-500">Harga:</span>
@@ -189,7 +197,6 @@
 
             Swal.fire({
                 title: '<span style="font-family: \'Playfair Display\', serif;">Konfirmasi Penukaran</span>',
-                // PESAN POPUP DIPERBARUI AGAR LEBIH JELAS
                 html: `<p style="font-family: 'Plus Jakarta Sans', sans-serif; color: #6b7280; font-size: 14px; line-height: 1.6;">
                           Anda akan menukarkan <b style="color: #2563eb;">${poin} Poin</b> untuk mendapatkan voucher diskon senilai <b style="color: #16a34a;">Rp ${diskon}</b>.<br><br>Lanjutkan penukaran?
                        </p>`,

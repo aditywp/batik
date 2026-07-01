@@ -19,7 +19,15 @@
                 @csrf
                 <div class="mb-5">
                     <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Nama Kategori</label>
-                    <input type="text" name="name" class="block w-full bg-gray-50 border-gray-100 rounded-xl text-sm focus:ring-[#1a1a2e] focus:border-[#1a1a2e] h-11 px-4 placeholder:text-gray-300 transition-all" placeholder="Contoh: Batik Tulis" required>
+                    <input type="text" 
+                           name="name" 
+                           class="block w-full bg-gray-50 border-gray-100 rounded-xl text-sm focus:ring-[#1a1a2e] focus:border-[#1a1a2e] h-11 px-4 placeholder:text-gray-300 transition-all" 
+                           placeholder="Contoh: Batik Tulis" 
+                           pattern="[a-zA-Z\s]{3,}" 
+                           minlength="3"
+                           title="Hanya huruf dan spasi, minimal 3 karakter"
+                           oninput="this.value = this.value.replace(/[^a-zA-Z\s]/g, '')" 
+                           required>
                     @error('name') <p class="text-red-500 text-xs mt-1 font-bold">{{ $message }}</p> @enderror
                 </div>
                 <button type="submit" class="w-full bg-[#e8c9a0] text-[#1a1a2e] py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#d4b78d] transition shadow-sm active:scale-95">
@@ -150,7 +158,15 @@
                 @method('PUT')
                 <div class="mb-8">
                     <label class="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Nama Kategori Baru</label>
-                    <input type="text" name="name" x-model="editName" class="block w-full bg-gray-50 border-gray-100 rounded-xl text-sm focus:ring-[#1a1a2e] focus:border-[#1a1a2e] h-12 px-4 transition-all" required>
+                    <input type="text" 
+                           name="name" 
+                           x-model="editName" 
+                           class="block w-full bg-gray-50 border-gray-100 rounded-xl text-sm focus:ring-[#1a1a2e] focus:border-[#1a1a2e] h-12 px-4 transition-all" 
+                           pattern="[a-zA-Z\s]{3,}" 
+                           minlength="3"
+                           title="Hanya huruf dan spasi, minimal 3 karakter"
+                           oninput="this.value = this.value.replace(/[^a-zA-Z\s]/g, '')"
+                           required>
                 </div>
                 <div class="flex justify-end gap-3">
                     <button type="button" @click="editModalOpen = false" class="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-gray-200 transition-colors">Batal</button>
@@ -185,12 +201,12 @@ $(document).ready(function () {
             icon: 'warning',
             showCancelButton: true,
             background: '#ffffff',
-            confirmButtonColor: '#1a1a2e', // Warna Navy Utama Tokomu
-            cancelButtonColor: '#f3f4f6',  // Abu-abu netral minimalis
+            confirmButtonColor: '#1a1a2e', 
+            cancelButtonColor: '#f3f4f6',  
             confirmButtonText: '<span style="color: #e8c9a0; font-weight: 900; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">Ya, Hapus</span>',
             cancelButtonText: '<span style="color: #4b5563; font-weight: 900; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">Batal</span>',
             customClass: {
-                popup: 'rounded-[32px]', // Menyamakan kelengkungan border UI tokomu
+                popup: 'rounded-[32px]', 
                 title: 'font-sans font-black text-[#1a1a2e] uppercase italic tracking-tight',
                 htmlContainer: 'font-sans text-xs font-medium text-gray-400'
             }

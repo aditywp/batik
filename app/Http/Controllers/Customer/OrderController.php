@@ -14,7 +14,7 @@ class OrderController extends Controller
     {
         // 1. Query dasar untuk pesanan milik user yang sedang login
         $query = \App\Models\Order::where('user_id', auth()->id())
-                    ->with(['items.product.category', 'items.variant'])
+                    ->with(['items.product.category'])
                     ->latest();
 
         // 2. Fitur Cari Berdasarkan Order Code / ID Pesanan
@@ -48,9 +48,10 @@ class OrderController extends Controller
                         if ($order->status !== 'cancelled') {
                             foreach ($order->items as $item) {
                                 if ($item->variant_id) {
-                                    \App\Models\ProductVariant::where('id', $item->variant_id)->increment('stock', $item->quantity);
+                                    // PERBAIKAN: Tambahkan withTrashed() agar produk/varian yang di-soft delete tetap bisa dikembalikan stoknya
+                                    \App\Models\ProductVariant::withTrashed()->where('id', $item->variant_id)->increment('stock', $item->quantity);
                                 }
-                                \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                                \App\Models\Product::withTrashed()->where('id', $item->product_id)->increment('stock', $item->quantity);
                             }
 
                             // KEMBALIKAN VOUCHER KE DOMPET
@@ -108,9 +109,10 @@ class OrderController extends Controller
                     if ($order->status !== 'cancelled') {
                         foreach ($order->items as $item) {
                             if ($item->variant_id) {
-                                \App\Models\ProductVariant::where('id', $item->variant_id)->increment('stock', $item->quantity);
+                                // PERBAIKAN: Tambahkan withTrashed()
+                                \App\Models\ProductVariant::withTrashed()->where('id', $item->variant_id)->increment('stock', $item->quantity);
                             }
-                            \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                            \App\Models\Product::withTrashed()->where('id', $item->product_id)->increment('stock', $item->quantity);
                         }
 
                         // KEMBALIKAN VOUCHER KE DOMPET
@@ -201,9 +203,10 @@ class OrderController extends Controller
             if ($order->status !== 'cancelled') {
                 foreach ($order->items as $item) {
                     if ($item->variant_id) {
-                        \App\Models\ProductVariant::where('id', $item->variant_id)->increment('stock', $item->quantity);
+                        // PERBAIKAN: Tambahkan withTrashed()
+                        \App\Models\ProductVariant::withTrashed()->where('id', $item->variant_id)->increment('stock', $item->quantity);
                     }
-                    \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                    \App\Models\Product::withTrashed()->where('id', $item->product_id)->increment('stock', $item->quantity);
                 }
 
                 // KEMBALIKAN VOUCHER KE DOMPET
@@ -246,9 +249,10 @@ class OrderController extends Controller
                 if ($order->status !== 'cancelled') {
                     foreach ($order->items as $item) {
                         if ($item->variant_id) {
-                            \App\Models\ProductVariant::where('id', $item->variant_id)->increment('stock', $item->quantity);
+                            // PERBAIKAN: Tambahkan withTrashed()
+                            \App\Models\ProductVariant::withTrashed()->where('id', $item->variant_id)->increment('stock', $item->quantity);
                         }
-                        \App\Models\Product::where('id', $item->product_id)->increment('stock', $item->quantity);
+                        \App\Models\Product::withTrashed()->where('id', $item->product_id)->increment('stock', $item->quantity);
                     }
 
                     // KEMBALIKAN VOUCHER KE DOMPET

@@ -1,0 +1,475 @@
+<?php
+
+namespace Tests\Feature\Product;
+
+use App\Models\Category;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+/**
+ * ============================================================
+ * AdminProductTest — Pengujian CRUD Produk (Admin)
+ * ============================================================
+ * Cakupan: Create, Update, Toggle Status, Delete, Search/Filter
+ * Jalankan: php artisan test --filter=AdminProductTest
+ * ============================================================
+ */
+class AdminProductTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User     $admin;
+    private User     $customer;
+    private Category $category;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('public');
+        $this->admin    = User::factory()->create(['role' => 'admin',    'email_verified_at' => now()]);
+        $this->customer = User::factory()->create(['role' => 'customer', 'email_verified_at' => now(), 'points' => 0]);
+        $this->category = Category::create(['name' => 'Batik Tulis', 'slug' => 'batik-tulis']);
+    }
+
+    // ─── HELPERS ─────────────────────────────────────────────
+
+    private function makeProduct(array $attrs = []): Product
+    {
+        $product = Product::create(array_merge([
+            'name'        => 'Produk Test',
+            'slug'        => 'produk-test-' . uniqid(),
+            'description' => 'Deskripsi produk test',
+            'price'       => 100000,
+            'stock'       => 10,
+            'category_id' => $this->category->id,
+            'collection'  => 'Women',
+            'is_active'   => true,
+        ], $attrs));
+
+        ProductVariant::create(['product_id' => $product->id, 'motif' => 'A', 'size' => 'M', 'stock' => 10]);
+        return $product;
+    }
+
+    private function validPayload(array $overrides = []): array
+    {
+        return array_merge([
+            'name'        => 'Batik Mega Mendung',
+            'description' => 'Motif khas Cirebon yang indah dan memukau',
+            'price'       => 150000,
+            'category_id' => $this->category->id,
+            'collection'  => 'Women',
+            'motifs'      => [[
+                'name'  => 'Motif Biru',
+                'image' => null,
+                'sizes' => [
+                    ['size' => 'S', 'price' => null, 'stock' => 10],
+                    ['size' => 'M', 'price' => null, 'stock' => 5],
+                ],
+            ]],
+        ], $overrides);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  INDEX
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function admin_dapat_melihat_halaman_daftar_produk()
+    {
+        $this->actingAs($this->admin)
+             ->get(route('admin.products.index'))
+             ->assertStatus(200)
+             ->assertViewIs('admin.products.index');
+    }
+
+    /** @test */
+    public function tamu_tidak_dapat_akses_daftar_produk_admin()
+    {
+        $this->get(route('admin.products.index'))
+             ->assertRedirect(route('login'));
+    }
+
+    /** @test */
+    public function customer_tidak_dapat_akses_daftar_produk_admin()
+    {
+        $response = $this->actingAs($this->customer)->get(route('admin.products.index'));
+        $this->assertTrue(in_array($response->getStatusCode(), [302, 403]));
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  CREATE — EP VALID
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_tambah_produk_dengan_data_lengkap_berhasil()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $this->validPayload())
+             ->assertRedirect(route('admin.products.index'))
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('products', [
+            'name'        => 'Batik Mega Mendung',
+            'price'       => 150000,
+            'category_id' => $this->category->id,
+            'stock'       => 15,
+        ]);
+        $this->assertDatabaseCount('product_variants', 2);
+    }
+
+    /** @test */
+    public function ep_valid_slug_produk_dibuat_otomatis_dari_nama()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $this->validPayload(['name' => 'Batik Unik']));
+
+        $product = Product::where('name', 'Batik Unik')->first();
+        $this->assertNotNull($product);
+        $this->assertStringContainsString('batik-unik', $product->slug);
+    }
+
+    /** @test */
+    public function ep_valid_tambah_produk_upload_gambar_valid()
+    {
+        $payload = $this->validPayload();
+        $payload['images'] = [UploadedFile::fake()->image('batik.jpg', 800, 600)->size(500)];
+
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $payload)
+             ->assertSessionDoesntHaveErrors('images');
+
+        $this->assertDatabaseCount('product_images', 1);
+    }
+
+    /** @test */
+    public function ep_valid_tambah_produk_stok_varian_nol_diizinkan()
+    {
+        $payload = $this->validPayload();
+        $payload['motifs'][0]['sizes'][0]['stock'] = 0;
+        $payload['motifs'][0]['sizes'][1]['stock'] = 0;
+
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $payload)
+             ->assertSessionDoesntHaveErrors();
+        $this->assertDatabaseHas('products', ['name' => 'Batik Mega Mendung', 'stock' => 0]);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  CREATE — EP INVALID
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_invalid_tambah_produk_gagal_nama_kosong()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $this->validPayload(['name' => '']))
+             ->assertSessionHasErrors('name');
+    }
+
+    /** @test */
+    public function ep_invalid_tambah_produk_gagal_kategori_tidak_ada()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $this->validPayload(['category_id' => 9999]))
+             ->assertSessionHasErrors('category_id');
+    }
+
+    /** @test */
+    public function ep_invalid_tambah_produk_gagal_koleksi_tidak_valid()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $this->validPayload(['collection' => 'Bayi']))
+             ->assertSessionHasErrors('collection');
+    }
+
+    /** @test */
+    public function ep_invalid_tambah_produk_gagal_gambar_format_salah()
+    {
+        $payload = $this->validPayload();
+        $payload['images'] = [UploadedFile::fake()->create('file.pdf', 100, 'application/pdf')];
+
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $payload)
+             ->assertSessionHasErrors('images.0');
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  CREATE — BVA
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function bva_tambah_produk_berhasil_nama_100_karakter()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $this->validPayload(['name' => str_repeat('A', 100)]))
+             ->assertSessionDoesntHaveErrors('name');
+    }
+
+    /** @test */
+    public function bva_tambah_produk_gagal_nama_101_karakter()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $this->validPayload(['name' => str_repeat('A', 101)]))
+             ->assertSessionHasErrors('name');
+    }
+
+    /** @test */
+    public function bva_tambah_produk_berhasil_harga_rp10000_batas_minimum()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $this->validPayload(['price' => 10000]))
+             ->assertSessionDoesntHaveErrors('price');
+        $this->assertDatabaseHas('products', ['price' => 10000]);
+    }
+
+    /** @test */
+    public function bva_tambah_produk_gagal_harga_rp9999_di_bawah_minimum()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $this->validPayload(['price' => 9999]))
+             ->assertSessionHasErrors('price');
+    }
+
+    /** @test */
+    public function bva_tambah_produk_berhasil_stok_1000_batas_maksimum()
+    {
+        $payload = $this->validPayload();
+        $payload['motifs'][0]['sizes'][0]['stock'] = 1000;
+        $payload['motifs'][0]['sizes'][1]['stock'] = 0;
+
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $payload)
+             ->assertSessionDoesntHaveErrors();
+    }
+
+    /** @test */
+    public function bva_tambah_produk_gagal_stok_1001_melampaui_maksimum()
+    {
+        $payload = $this->validPayload();
+        $payload['motifs'][0]['sizes'][0]['stock'] = 1001;
+
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $payload)
+             ->assertSessionHasErrors();
+    }
+
+    /** @test */
+    public function bva_tambah_produk_berhasil_gambar_2048kb_batas_maksimum()
+    {
+        $payload = $this->validPayload();
+        $payload['images'] = [UploadedFile::fake()->image('ok.jpg')->size(2048)];
+
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $payload)
+             ->assertSessionDoesntHaveErrors('images.0');
+    }
+
+    /** @test */
+    public function bva_tambah_produk_gagal_gambar_2049kb_melebihi_batas()
+    {
+        $payload = $this->validPayload();
+        $payload['images'] = [UploadedFile::fake()->image('besar.jpg')->size(2049)];
+
+        $this->actingAs($this->admin)
+             ->post(route('admin.products.store'), $payload)
+             ->assertSessionHasErrors('images.0');
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  UPDATE
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_edit_produk_dengan_data_valid_berhasil()
+    {
+        $product = $this->makeProduct();
+
+        $this->actingAs($this->admin)
+             ->put(route('admin.products.update', $product),
+                   $this->validPayload(['name' => 'Produk Diedit', 'price' => 200000]))
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('products', ['id' => $product->id, 'name' => 'Produk Diedit', 'price' => 200000]);
+    }
+
+    /** @test */
+    public function ep_invalid_edit_produk_gagal_nama_kosong()
+    {
+        $product = $this->makeProduct();
+
+        $this->actingAs($this->admin)
+             ->put(route('admin.products.update', $product), $this->validPayload(['name' => '']))
+             ->assertSessionHasErrors('name');
+    }
+
+    /** @test */
+    public function bva_edit_produk_gagal_harga_rp9999()
+    {
+        $product = $this->makeProduct();
+
+        $this->actingAs($this->admin)
+             ->put(route('admin.products.update', $product), $this->validPayload(['price' => 9999]))
+             ->assertSessionHasErrors('price');
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  TOGGLE STATUS
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_toggle_produk_aktif_menjadi_nonaktif()
+    {
+        $product = $this->makeProduct(['is_active' => true]);
+        $this->actingAs($this->admin)->patch(route('admin.products.toggle', $product));
+        $this->assertDatabaseHas('products', ['id' => $product->id, 'is_active' => false]);
+    }
+
+    /** @test */
+    public function ep_valid_toggle_produk_nonaktif_menjadi_aktif()
+    {
+        $product = $this->makeProduct(['is_active' => false]);
+        $this->actingAs($this->admin)->patch(route('admin.products.toggle', $product));
+        $this->assertDatabaseHas('products', ['id' => $product->id, 'is_active' => true]);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  DELETE
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_hapus_produk_tanpa_riwayat_order_berhasil()
+    {
+        $product = $this->makeProduct();
+
+        $this->actingAs($this->admin)
+             ->delete(route('admin.products.destroy', $product))
+             ->assertRedirect(route('admin.products.index'))
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('products', ['id' => $product->id]);
+    }
+
+    /** @test */
+    public function ep_invalid_hapus_produk_gagal_sudah_ada_di_riwayat_pesanan()
+    {
+        $product = $this->makeProduct();
+
+        $order = Order::create([
+            'user_id' => $this->customer->id, 'order_code' => 'BI-DEL-' . uniqid(),
+            'subtotal' => 100000, 'shipping_cost' => 10000, 'total' => 110000,
+            'status' => 'delivered', 'payment_status' => 'paid',
+            'shipping_address' => 'Jl. Test 1', 'courier' => 'jne', 'courier_service' => 'REG',
+        ]);
+        OrderItem::create([
+            'order_id' => $order->id, 'product_id' => $product->id,
+            'quantity' => 1, 'price' => 100000, 'subtotal' => 100000,
+        ]);
+
+        $this->actingAs($this->admin)
+             ->delete(route('admin.products.destroy', $product))
+             ->assertRedirect()
+             ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('products', ['id' => $product->id]);
+    }
+
+    // ═════════════════════════════════════════════════════════
+    //  SEARCH & FILTER
+    // ═════════════════════════════════════════════════════════
+
+    /** @test */
+    public function ep_valid_pencarian_produk_berdasarkan_nama_ditemukan()
+    {
+        $this->makeProduct(['name' => 'Batik Mega Mendung', 'slug' => 'mega-' . uniqid()]);
+        $this->makeProduct(['name' => 'Batik Parang Rusak', 'slug' => 'parang-' . uniqid()]);
+
+        $this->actingAs($this->admin)
+             ->get(route('admin.products.index', ['search' => 'Mega']))
+             ->assertStatus(200)
+             ->assertSee('Batik Mega Mendung');
+    }
+
+    /** @test */
+    public function ep_valid_pencarian_produk_kata_kunci_tidak_ditemukan()
+    {
+        $this->makeProduct(['name' => 'Batik Tulis Asli', 'slug' => 'tulis-asli-' . uniqid()]);
+
+        $this->actingAs($this->admin)
+             ->get(route('admin.products.index', ['search' => 'ZZNOTFOUND']))
+             ->assertStatus(200)
+             ->assertDontSee('Batik Tulis Asli');
+    }
+
+    /** @test */
+    public function ep_valid_filter_produk_berdasarkan_kategori()
+    {
+        $cat2 = Category::create(['name' => 'Batik Cap', 'slug' => 'batik-cap']);
+        $this->makeProduct(['name' => 'Produk Tulis', 'slug' => 'p-tulis-' . uniqid()]);
+        Product::create([
+            'name' => 'Produk Cap', 'slug' => 'p-cap-' . uniqid(),
+            'description' => 'Desc', 'price' => 50000, 'stock' => 5,
+            'category_id' => $cat2->id, 'collection' => 'Men',
+        ]);
+
+        $this->actingAs($this->admin)
+             ->get(route('admin.products.index', ['category' => $cat2->id]))
+             ->assertStatus(200)
+             ->assertSee('Produk Cap');
+    }
+
+    /** @test */
+    public function ep_valid_filter_stok_habis_hanya_tampilkan_stok_nol()
+    {
+        $this->makeProduct(['name' => 'Produk Habis', 'slug' => 'habis-' . uniqid(), 'stock' => 0]);
+        $this->makeProduct(['name' => 'Produk Ada',   'slug' => 'ada-' . uniqid(),   'stock' => 10]);
+
+        $this->actingAs($this->admin)
+             ->get(route('admin.products.index', ['stock_status' => 'empty']))
+             ->assertStatus(200)
+             ->assertSee('Produk Habis');
+    }
+
+    /** @test */
+    public function ep_valid_filter_stok_menipis_1_sampai_5()
+    {
+        $this->makeProduct(['name' => 'Produk Menipis', 'slug' => 'menipis-' . uniqid(), 'stock' => 3]);
+        $this->makeProduct(['name' => 'Produk Normal',  'slug' => 'normal-' . uniqid(),  'stock' => 20]);
+
+        $this->actingAs($this->admin)
+             ->get(route('admin.products.index', ['stock_status' => 'low']))
+             ->assertStatus(200)
+             ->assertSee('Produk Menipis');
+    }
+
+    /** @test */
+    public function ep_valid_filter_produk_berdasarkan_koleksi_women()
+    {
+        $this->makeProduct(['name' => 'Produk Women', 'slug' => 'pw-' . uniqid(), 'collection' => 'Women']);
+        $this->makeProduct(['name' => 'Produk Men',   'slug' => 'pm-' . uniqid(), 'collection' => 'Men']);
+
+        $this->actingAs($this->admin)
+             ->get(route('admin.products.index', ['collection' => 'Women']))
+             ->assertStatus(200)
+             ->assertSee('Produk Women');
+    }
+
+    /** @test */
+    public function ep_valid_filter_produk_berdasarkan_status_aktif()
+    {
+        $this->makeProduct(['name' => 'Produk Aktif', 'slug' => 'pa-' . uniqid(), 'is_active' => true]);
+        $this->makeProduct(['name' => 'Produk Draft', 'slug' => 'pd-' . uniqid(), 'is_active' => false]);
+
+        $this->actingAs($this->admin)
+             ->get(route('admin.products.index', ['is_active' => '1']))
+             ->assertStatus(200)
+             ->assertSee('Produk Aktif');
+    }
+}

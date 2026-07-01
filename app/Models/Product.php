@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes; // <-- Perbaikan: SoftDeletes harus kapital
 
     /**
      * Kolom yang boleh diisi secara massal.
@@ -22,7 +23,7 @@ class Product extends Model
         'image',
         'category_id',
         'collection',
-        'is_active', // <--- TAMBAHKAN BARIS INI
+        'is_active',
     ];
 
     // Relasi ke Category (Many to One)
@@ -50,7 +51,6 @@ class Product extends Model
     }
 
     // Relasi ke OrderItem (One to Many)
-    // Berfungsi untuk mengecek apakah produk sudah pernah dibeli (mencegah error saat dihapus)
     public function orderItems()
     {
         return $this->hasMany(OrderItem::class);

@@ -146,14 +146,17 @@
                         {{-- Gambar produk --}}
                         <div class="w-14 h-14 rounded-lg bg-stone-100 border border-stone-200 flex-shrink-0 overflow-hidden">
                             @php
-                                $displayImage = $item->variant->image_path 
-                                                ?? $item->product->images->first()->image_path 
+                                // PERBAIKAN: Gunakan image_snapshot dan Null-Safe Operator (?->) agar tidak crash jika produk terhapus
+                                $displayImage = $item->image_snapshot
+                                                ?? $item->variant?->image_path 
+                                                ?? $item->product?->variants?->first()?->image_path 
+                                                ?? $item->product?->images?->first()?->image_path 
                                                 ?? null;
                             @endphp
 
                             @if($displayImage)
                                 <img src="{{ asset('storage/' . $displayImage) }}"
-                                     alt="{{ $item->product->name ?? 'Produk' }}"
+                                     alt="{{ $item->product_name_snapshot ?? ($item->product?->name ?? 'Produk') }}"
                                      class="w-full h-full object-cover" />
                             @else
                                 <div class="w-full h-full flex items-center justify-center text-stone-300">
@@ -166,11 +169,12 @@
                         </div>
 
                         <div class="flex-1 min-w-0">
+                            {{-- PERBAIKAN: Gunakan product_name_snapshot atau Null-Safe Operator (?->) --}}
                             <p class="font-medium text-stone-800 text-sm truncate">
-                                {{ $item->product->name ?? 'Produk dihapus' }}
+                                {{ $item->product_name_snapshot ?? ($item->product?->name ?? 'Produk Tidak Tersedia') }}
                             </p>
                             <p class="text-xs text-stone-400 mt-0.5">
-                                {{ $item->quantity }} × Rp {{ number_format($item->price, 0, ',', '.') }}
+                                {{ $item->quantity }} × Rp {{ number_format($item->price_snapshot ?? $item->price, 0, ',', '.') }}
                                 @if($item->variant)
                                     <span class="ml-1 text-stone-500 font-medium italic">({{ $item->variant->motif }} / {{ $item->variant->size }})</span>
                                 @endif

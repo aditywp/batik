@@ -15,6 +15,11 @@
             background-color: #faf9f6;
             font-family: 'Plus Jakarta Sans', sans-serif;
         }
+        /* Menghilangkan ikon mata bawaan browser (seperti Microsoft Edge) */
+        input::-ms-reveal,
+        input::-ms-clear {
+            display: none;
+        }
     </style>
 </head>
 <body class="bg-[#faf9f6] antialiased text-[#1a1a2e]">
@@ -63,6 +68,24 @@
                     <p class="text-gray-400 text-xs mt-1 font-medium">Buat akun baru Anda untuk mulai mengeksplorasi katalog kami.</p>
                 </div>
 
+                {{-- Blok Peringatan Error Global & Validasi --}}
+                @if (session('error') || $errors->any())
+                    <div class="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
+                        <div class="flex items-center mb-1.5">
+                            <svg class="mr-2 h-5 w-5 text-red-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span class="font-black text-[11px] uppercase tracking-widest text-red-800">Pendaftaran Gagal</span>
+                        </div>
+                        <ul class="list-disc pl-9 text-red-600 text-[11px] font-medium leading-relaxed">
+                            @if(session('error'))
+                                <li>{{ session('error') }}</li>
+                            @endif
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
                 <form method="POST" action="{{ route('register') }}" x-data="{ showPassword: false, showConfirmPassword: false }">
                     @csrf
 
@@ -70,34 +93,28 @@
                         <label for="name" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Nama Lengkap</label>
                         <div class="relative">
                             <input id="name" type="text" name="name" value="{{ old('name') }}" required autofocus autocomplete="name"
-                                   placeholder="Aditya Wirajaya"
-                                   class="w-full bg-gray-50/60 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-[#1a1a2e] focus:border-[#1a1a2e] pl-10 pr-4 h-11 transition-all font-medium text-slate-800 placeholder:text-stone-300" />
-                            <div class="absolute left-3 top-3 text-gray-400">
+                                   placeholder="Masukkan Nama Lengkap"
+                                   class="w-full bg-gray-50/60 border {{ $errors->has('name') ? 'border-red-400' : 'border-stone-200' }} rounded-xl text-sm focus:ring-2 focus:ring-[#1a1a2e] focus:border-[#1a1a2e] pl-10 pr-4 h-11 transition-all font-medium text-slate-800 placeholder:text-stone-300" />
+                            <div class="absolute left-3 top-3 {{ $errors->has('name') ? 'text-red-400' : 'text-gray-400' }}">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                 </svg>
                             </div>
                         </div>
-                        @if ($errors->has('name'))
-                            <p class="mt-1 text-xs text-red-500 font-bold">{{ $errors->first('name') }}</p>
-                        @endif
                     </div>
 
                     <div class="mb-4">
                         <label for="email" class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Alamat Email</label>
                         <div class="relative">
                             <input id="email" type="email" name="email" value="{{ old('email') }}" required autocomplete="username"
-                                   placeholder="nama@email.com"
-                                   class="w-full bg-gray-50/60 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-[#1a1a2e] focus:border-[#1a1a2e] pl-10 pr-4 h-11 transition-all font-medium text-slate-800 placeholder:text-stone-300" />
-                            <div class="absolute left-3 top-3 text-gray-400">
+                                   placeholder="Masukkan Alamat Email"
+                                   class="w-full bg-gray-50/60 border {{ $errors->has('email') ? 'border-red-400' : 'border-stone-200' }} rounded-xl text-sm focus:ring-2 focus:ring-[#1a1a2e] focus:border-[#1a1a2e] pl-10 pr-4 h-11 transition-all font-medium text-slate-800 placeholder:text-stone-300" />
+                            <div class="absolute left-3 top-3 {{ $errors->has('email') ? 'text-red-400' : 'text-gray-400' }}">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.206" />
                                 </svg>
                             </div>
                         </div>
-                        @if ($errors->has('email'))
-                            <p class="mt-1 text-xs text-red-500 font-bold">{{ $errors->first('email') }}</p>
-                        @endif
                     </div>
 
                     <div class="mb-4">
@@ -105,8 +122,8 @@
                         <div class="relative">
                             <input id="password" :type="showPassword ? 'text' : 'password'" name="password" required autocomplete="new-password"
                                    placeholder="••••••••"
-                                   class="w-full bg-gray-50/60 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-[#1a1a2e] focus:border-[#1a1a2e] pl-10 pr-12 h-11 transition-all font-medium text-slate-800 placeholder:text-stone-300" />
-                            <div class="absolute left-3 top-3 text-gray-400">
+                                   class="w-full bg-gray-50/60 border {{ $errors->has('password') ? 'border-red-400' : 'border-stone-200' }} rounded-xl text-sm focus:ring-2 focus:ring-[#1a1a2e] focus:border-[#1a1a2e] pl-10 pr-12 h-11 transition-all font-medium text-slate-800 placeholder:text-stone-300" />
+                            <div class="absolute left-3 top-3 {{ $errors->has('password') ? 'text-red-400' : 'text-gray-400' }}">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                 </svg>
@@ -120,9 +137,6 @@
                                 </template>
                             </button>
                         </div>
-                        @if ($errors->has('password'))
-                            <p class="mt-1 text-xs text-red-500 font-bold">{{ $errors->first('password') }}</p>
-                        @endif
                     </div>
 
                     <div class="mb-6">
@@ -130,8 +144,8 @@
                         <div class="relative">
                             <input id="password_confirmation" :type="showConfirmPassword ? 'text' : 'password'" name="password_confirmation" required autocomplete="new-password"
                                    placeholder="••••••••"
-                                   class="w-full bg-gray-50/60 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-[#1a1a2e] focus:border-[#1a1a2e] pl-10 pr-12 h-11 transition-all font-medium text-slate-800 placeholder:text-stone-300" />
-                            <div class="absolute left-3 top-3 text-gray-400">
+                                   class="w-full bg-gray-50/60 border {{ $errors->has('password_confirmation') ? 'border-red-400' : 'border-stone-200' }} rounded-xl text-sm focus:ring-2 focus:ring-[#1a1a2e] focus:border-[#1a1a2e] pl-10 pr-12 h-11 transition-all font-medium text-slate-800 placeholder:text-stone-300" />
+                            <div class="absolute left-3 top-3 {{ $errors->has('password_confirmation') ? 'text-red-400' : 'text-gray-400' }}">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                                 </svg>
@@ -145,9 +159,6 @@
                                 </template>
                             </button>
                         </div>
-                        @if ($errors->has('password_confirmation'))
-                            <p class="mt-1 text-xs text-red-500 font-bold">{{ $errors->first('password_confirmation') }}</p>
-                        @endif
                     </div>
 
                     {{-- Tombol Submit Registrasi Member Baru --}}
@@ -170,5 +181,27 @@
         </div>
 
     </div>
+
+    {{-- SCRIPT UNTUK POP-UP SWEETALERT2 --}}
+    @if (session('registered_success'))
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                Swal.fire({
+                    title: 'Pendaftaran Berhasil!',
+                    text: "{{ session('registered_success') }}",
+                    icon: 'success',
+                    confirmButtonText: 'OK, LANJUT MASUK',
+                    allowOutsideClick: false,
+                    confirmButtonColor: '#1a1a2e'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.href = "{{ route('login') }}";
+                    }
+                });
+            });
+        </script>
+    @endif
+
 </body>
 </html>

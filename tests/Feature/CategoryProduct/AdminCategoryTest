@@ -1,0 +1,253 @@
+<?php
+
+namespace Tests\Feature\CategoryProduct;
+
+use App\Models\Category;
+use App\Models\Product;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+/**
+ * ============================================================
+ * AdminCategoryTest — Pengujian CRUD Kategori oleh Admin
+ * ============================================================
+ * Cakupan: Create, Update, Delete, Search/Filter Kategori
+ * Jalankan: php artisan test --filter=AdminCategoryTest
+ * ============================================================
+ */
+class AdminCategoryTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $admin;
+    private User $customer;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->admin    = User::factory()->create(['role' => 'admin',    'email_verified_at' => now()]);
+        $this->customer = User::factory()->create(['role' => 'customer', 'email_verified_at' => now(), 'points' => 0]);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // INDEX
+    // ─────────────────────────────────────────────────────────
+
+    /** @test */
+    public function admin_dapat_melihat_daftar_kategori()
+    {
+        $this->actingAs($this->admin)
+             ->get(route('admin.categories.index'))
+             ->assertStatus(200)
+             ->assertViewIs('admin.categories.index');
+    }
+
+    /** @test */
+    public function customer_tidak_dapat_mengakses_halaman_kategori_admin()
+    {
+        $response = $this->actingAs($this->customer)
+                         ->get(route('admin.categories.index'));
+        $this->assertTrue(in_array($response->getStatusCode(), [302, 403]));
+    }
+
+    /** @test */
+    public function tamu_tidak_dapat_mengakses_halaman_kategori_admin()
+    {
+        $this->get(route('admin.categories.index'))
+             ->assertRedirect(route('login'));
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // CREATE (STORE)
+    // ─────────────────────────────────────────────────────────
+
+    /** @test */
+    public function ep_valid_admin_dapat_menambah_kategori_baru()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.categories.store'), ['name' => 'Batik Tulis'])
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('categories', ['name' => 'Batik Tulis', 'slug' => 'batik-tulis']);
+    }
+
+    /** @test */
+    public function ep_valid_slug_dibuat_otomatis_dari_nama_kategori()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.categories.store'), ['name' => 'Batik Cap Halus']);
+
+        $this->assertDatabaseHas('categories', ['name' => 'Batik Cap Halus', 'slug' => 'batik-cap-halus']);
+    }
+
+    /** @test */
+    public function ep_invalid_tambah_kategori_gagal_nama_kosong()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.categories.store'), ['name' => ''])
+             ->assertSessionHasErrors('name');
+    }
+
+    /** @test */
+    public function ep_invalid_tambah_kategori_gagal_nama_duplikat()
+    {
+        Category::create(['name' => 'Batik Tulis', 'slug' => 'batik-tulis']);
+
+        $this->actingAs($this->admin)
+             ->post(route('admin.categories.store'), ['name' => 'Batik Tulis'])
+             ->assertSessionHasErrors('name');
+    }
+
+    /** @test */
+    public function bva_tambah_kategori_berhasil_nama_tepat_255_karakter()
+    {
+        $name = str_repeat('A', 255);
+
+        $this->actingAs($this->admin)
+             ->post(route('admin.categories.store'), ['name' => $name])
+             ->assertSessionDoesntHaveErrors('name');
+
+        $this->assertDatabaseHas('categories', ['name' => $name]);
+    }
+
+    /** @test */
+    public function bva_tambah_kategori_gagal_nama_256_karakter()
+    {
+        $this->actingAs($this->admin)
+             ->post(route('admin.categories.store'), ['name' => str_repeat('A', 256)])
+             ->assertSessionHasErrors('name');
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // UPDATE
+    // ─────────────────────────────────────────────────────────
+
+    /** @test */
+    public function ep_valid_admin_dapat_mengedit_kategori()
+    {
+        $cat = Category::create(['name' => 'Batik Lama', 'slug' => 'batik-lama']);
+
+        $this->actingAs($this->admin)
+             ->put(route('admin.categories.update', $cat), ['name' => 'Batik Baru'])
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('categories', [
+            'id'   => $cat->id,
+            'name' => 'Batik Baru',
+            'slug' => 'batik-baru',
+        ]);
+    }
+
+    /** @test */
+    public function ep_invalid_edit_kategori_gagal_nama_kosong()
+    {
+        $cat = Category::create(['name' => 'Batik X', 'slug' => 'batik-x']);
+
+        $this->actingAs($this->admin)
+             ->put(route('admin.categories.update', $cat), ['name' => ''])
+             ->assertSessionHasErrors('name');
+    }
+
+    /** @test */
+    public function ep_invalid_edit_kategori_gagal_nama_duplikat_kategori_lain()
+    {
+        Category::create(['name' => 'Batik A', 'slug' => 'batik-a']);
+        $cat = Category::create(['name' => 'Batik B', 'slug' => 'batik-b']);
+
+        $this->actingAs($this->admin)
+             ->put(route('admin.categories.update', $cat), ['name' => 'Batik A'])
+             ->assertSessionHasErrors('name');
+    }
+
+    /** @test */
+    public function ep_valid_edit_kategori_dengan_nama_sama_tidak_error_unique()
+    {
+        $cat = Category::create(['name' => 'Batik Sama', 'slug' => 'batik-sama']);
+
+        // Mengubah ke nama yang sama — unique rule harus mengecualikan diri sendiri
+        $this->actingAs($this->admin)
+             ->put(route('admin.categories.update', $cat), ['name' => 'Batik Sama'])
+             ->assertSessionDoesntHaveErrors('name');
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // DELETE
+    // ─────────────────────────────────────────────────────────
+
+    /** @test */
+    public function ep_valid_admin_dapat_menghapus_kategori_tanpa_produk()
+    {
+        $cat = Category::create(['name' => 'Kategori Hapus', 'slug' => 'kategori-hapus']);
+
+        $this->actingAs($this->admin)
+             ->delete(route('admin.categories.destroy', $cat))
+             ->assertRedirect()
+             ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('categories', ['id' => $cat->id]);
+    }
+
+    /** @test */
+    public function ep_invalid_hapus_kategori_gagal_masih_ada_produk()
+    {
+        $cat = Category::create(['name' => 'Kategori Punya Produk', 'slug' => 'kategori-punya-produk']);
+        Product::create([
+            'name' => 'Produk Test', 'slug' => 'produk-test', 'description' => 'Desc',
+            'price' => 50000, 'stock' => 5, 'category_id' => $cat->id, 'collection' => 'Women',
+        ]);
+
+        $this->actingAs($this->admin)
+             ->delete(route('admin.categories.destroy', $cat))
+             ->assertRedirect()
+             ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('categories', ['id' => $cat->id]);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // SEARCH & FILTER
+    // ─────────────────────────────────────────────────────────
+
+    /** @test */
+    public function ep_valid_pencarian_kategori_berdasarkan_nama_ditemukan()
+    {
+        Category::create(['name' => 'Batik Tulis', 'slug' => 'batik-tulis']);
+        Category::create(['name' => 'Batik Cap',   'slug' => 'batik-cap']);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.categories.index', ['search' => 'Tulis']));
+
+        $response->assertStatus(200)
+                 ->assertSee('Batik Tulis')
+                 ->assertDontSee('Batik Cap');
+    }
+
+    /** @test */
+    public function ep_valid_pencarian_kategori_kata_kunci_tidak_ditemukan()
+    {
+        Category::create(['name' => 'Batik Tulis', 'slug' => 'batik-tulis']);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.categories.index', ['search' => 'ZZZNOTFOUND']));
+
+        $response->assertStatus(200)
+                 ->assertDontSee('Batik Tulis');
+    }
+
+    /** @test */
+    public function ep_valid_tanpa_pencarian_menampilkan_semua_kategori()
+    {
+        Category::create(['name' => 'Cat A', 'slug' => 'cat-a']);
+        Category::create(['name' => 'Cat B', 'slug' => 'cat-b']);
+
+        $response = $this->actingAs($this->admin)
+                         ->get(route('admin.categories.index'));
+
+        $response->assertStatus(200)
+                 ->assertSee('Cat A')
+                 ->assertSee('Cat B');
+    }
+}
